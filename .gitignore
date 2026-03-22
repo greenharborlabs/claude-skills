@@ -1,0 +1,13 @@
+# Track only agents/ and skills/ — ignore everything else
+/*
+!.gitignore
+!agents/
+!skills/
+
+# Inside skills: ignore symlinks (managed in their own repos)
+skills/domain-name-brainstormer
+skills/skill-creator
+
+# Inside skills: ignore local settings and memory
+skills/.claude/
+skills/**/memory/
