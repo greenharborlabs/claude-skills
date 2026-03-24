@@ -31,8 +31,10 @@ Specialist reviewers (security, performance) are resolved automatically for supp
 
 1. **NEVER write, edit, or create files yourself.** Not even one line. Every mutation
    goes through a Coder sub-agent via the Agent tool.
-2. **NEVER run full test suites or full builds mid-cycle.** After each code→review
-   cycle, run only the tests that were created or modified in that cycle.
+2. **NEVER run full test suites or full builds during execution.** After each
+   code→review cycle, run only the tests that were created or modified in that
+   cycle. (Exception: Step 0 pre-flight smoke test is exempt — it runs before
+   any work begins.)
 3. **Sub-agent prompts must be self-contained.** Each prompt must carry all context
    the sub-agent needs — file paths, relevant snippets, the spec excerpt, and explicit
    success criteria. The sub-agent has no memory of prior turns.
@@ -121,6 +123,26 @@ Flags:
 
 ---
 
+### Step 0 — Pre-flight Validation
+
+Before doing any work, verify the workspace is ready:
+
+1. **Clean working tree:** Run `git status`. If there are uncommitted changes, stop
+   and ask the user: "Working tree has uncommitted changes — commit or stash before
+   orchestrating?" A dirty working tree pollutes diffs and makes rollback impossible.
+2. **Record starting commit:** Run `git rev-parse HEAD` and store the result as
+   `START_COMMIT`. This is used for specialist review diffs (Step 6.5) and rollback
+   guidance if a batch is blocked.
+3. **Smoke test (optional):** If the plan file references an existing test suite and
+   the project has an obvious test command, run a quick smoke test (e.g. compile-only
+   or a single fast test). If it fails, warn the user: "Project doesn't build/pass
+   tests at HEAD — orchestration will likely fail. Continue anyway?" If the user
+   says no, stop.
+
+Print: `Pre-flight: clean tree, START_COMMIT=<short hash>`
+
+---
+
 ### Step 1 — Parse the Plan
 
 Read the plan file with the `Read` tool. Extract work units using the **first
@@ -156,15 +178,28 @@ If `--coder`, `--reviewer`, or `--architect` flags were provided, use those valu
 Otherwise, auto-detect by scanning the plan file's `**Files:**` sections + a quick
 Glob of the project root:
 
-| Signal | Coder | Reviewer | Architect |
-|--------|-------|----------|-----------|
-| `*.java`, `*.gradle`, `pom.xml` | backend-coder-java | backend-reviewer-java | backend-planning-architect |
-| `CLAUDE.md` state markers + `nanoclaw`/`container` in package.json or skill.md | nanoclaw-coder | nanoclaw-reviewer | nanoclaw-architect |
-| `*.py` + `openclaw`/`alpaca`/`kalshi` references | openclaw-coder | openclaw-reviewer | openclaw-architect |
-| `*.ts`/`*.tsx` (no NanoClaw signals) | frontend-impl | frontend-reviewer | frontend-architect |
-| Mixed/unknown | Ask user via AskUserQuestion with detected signals |
+| Signal | Coder | Reviewer | Architect | Test Command |
+|--------|-------|----------|-----------|-------------|
+| `*.java` + `build.gradle*` | backend-coder-java | backend-reviewer-java | backend-planning-architect | `./gradlew test --tests "<pattern>"` |
+| `*.java` + `pom.xml` | backend-coder-java | backend-reviewer-java | backend-planning-architect | `mvn -pl . test -Dtest="<pattern>"` |
+| `CLAUDE.md` state markers + `nanoclaw`/`container` in package.json or skill.md | nanoclaw-coder | nanoclaw-reviewer | nanoclaw-architect | `npx jest --testPathPattern="<pattern>"` |
+| `*.py` + `openclaw`/`alpaca`/`kalshi` references | openclaw-coder | openclaw-reviewer | openclaw-architect | `pytest <pattern>` |
+| `*.ts`/`*.tsx` + `vitest` in package.json | frontend-impl | frontend-reviewer | frontend-architect | `npx vitest run <pattern>` |
+| `*.ts`/`*.tsx` + `jest` in package.json (no NanoClaw signals) | frontend-impl | frontend-reviewer | frontend-architect | `npx jest --testPathPattern="<pattern>" --no-coverage` |
+| `*.py` (no OpenClaw signals) | *(general-purpose)* | *(general-purpose)* | *(general-purpose)* | `pytest <pattern>` |
+| Mixed/unknown | Ask user via AskUserQuestion with detected signals |  |
+
+Store the resolved test command as `TEST_CMD`. Use it in Steps 4e and 6 instead of
+hardcoding any specific test runner. **When constructing coder prompts, resolve
+TEST_CMD to the literal command** — sub-agents have no memory of prior turns and
+cannot dereference variables.
+
+**Multi-module projects:** For Gradle multi-project builds, prefix the module
+(e.g. `./gradlew :api:test --tests "<pattern>"`). For Maven multi-module, use
+`-pl <module>`. Determine the correct module from the plan file's file paths.
 
 Print: `Agent suite: <coder> / <reviewer> / <architect> (detected from: <signal>)`
+Print: `Test command: <TEST_CMD>`
 
 **Specialist reviewers (auto-resolved, not overridable):**
 
@@ -196,6 +231,11 @@ layout. This step has a strict budget:
 Deeper per-task exploration happens in Step 4, immediately before each batch is
 dispatched — not here.
 
+**Initialize the contract registry:** Create an empty contract registry (in-memory
+list). As batches complete, this registry accumulates lightweight interface entries
+that downstream batches can reference without re-reading files. See Step 4f for
+the update protocol.
+
 ---
 
 ### Step 3 — Build Task Graph
@@ -213,12 +253,30 @@ Then wire dependencies with `TaskUpdate` (`addBlockedBy` / `addBlocks`).
 - `pending` → reuse as-is
 Create new tasks only for unmatched work units.
 
+Also check for the sentinel tasks `specialist-review-gate` and `final-verification-gate`.
+If all work-unit tasks are `completed` but the gates are not:
+- `final-verification-gate` pending → resume at Step 6
+- `specialist-review-gate` pending → resume at Step 6.5
+- Both completed → resume at Step 7 (docs) or Step 8 (summary)
+
+**Sentinel tasks:** After creating all work-unit tasks, also create:
+- `final-verification-gate` — marked `completed` after Step 6 passes
+- `specialist-review-gate` — marked `completed` after Step 6.5 finishes (or
+  immediately if no specialist reviewers are available for this stack)
+
 **Dry-run mode (`--dry-run`):** After building the graph, print:
 
 | Batch | Task ID | Subject | Dependencies | Estimated Files |
 |-------|---------|---------|--------------|-----------------|
 
-Group by dependency tier. Then **stop — do not execute**.
+Group by dependency tier. Also print:
+```
+Agent suite   : <coder> / <reviewer> / <architect>
+Test command  : <TEST_CMD>
+Specialists   : <security + performance types, or "none for this stack">
+Est. min spawns: <(coders + reviewers) × batches — lower bound before fix cycles>
+```
+Then **stop — do not execute**.
 
 ---
 
@@ -227,6 +285,19 @@ Group by dependency tier. Then **stop — do not execute**.
 Group tasks into dependency tiers (batches). Tasks in the same tier are
 independent and may be run in parallel.
 
+**Pipelining opportunity (within a tier only):** When a tier has multiple
+independent work groups, you MAY overlap the Reviewer for work group A with
+exploration (4a) for work group B within the **same tier**, as long as:
+- The total running sub-agent count stays ≤ 3
+- You do NOT spawn work group B's Coder until work group A's review cycle is
+  fully resolved (PASS or exhausted), if they share any files
+- Both work groups are in the same dependency tier (truly independent)
+
+**Never pipeline across tiers.** Tier N+1 depends on tier N by definition — do
+not begin tier N+1 exploration until all of tier N is complete.
+
+This within-tier overlap can reduce wall-clock time for tiers with 2+ work groups.
+
 For each batch, execute the **Code → Review → Fix** cycle:
 
 ---
@@ -234,15 +305,19 @@ For each batch, execute the **Code → Review → Fix** cycle:
 #### 4a. Batch exploration + group sizing
 
 **Explore now, for this batch only.** Before constructing any prompts, do a
-focused read of the files this batch touches. Hard limits:
+focused read of the files this batch touches. Hard limits scale with batch size:
 
-- **Max 5 file reads per batch.** Prefer reading only the specific line ranges
-  referenced in the plan, not whole files.
-- **Max 2 Grep/Glob calls per batch.** Use them to locate test files or confirm
-  an interface signature — not to browse.
-- **Discard after use.** Do not accumulate findings across batches. Once the
-  coder prompts for this batch are written, that context is spent — do not
-  reference it in future batches.
+- **Max 2 file reads per task + 2 baseline** (e.g. 3-task batch = 8 reads max).
+  Prefer reading only the specific line ranges referenced in the plan, not whole files.
+- **Max 1 Grep/Glob call per task + 1 baseline** (e.g. 3-task batch = 4 searches max).
+  Use them to locate test files or confirm an interface signature — not to browse.
+- **Contract registry is additive.** You may reference the contract registry
+  (populated by prior batches in Step 4f) to look up interface signatures
+  introduced earlier, without counting it toward your read budget. Do NOT re-read
+  files that are already summarized in the registry.
+- **Discard raw file contents after use.** Once the coder prompts for this batch
+  are written, drop the raw file content from your working memory. The contract
+  registry carries forward only lightweight interface entries — not full files.
 
 For each task in the batch, identify only:
 1. **Entry points** — files explicitly named in the plan, confirmed to exist.
@@ -273,7 +348,7 @@ exploration findings from 4a. The prompt must include:
 <list from 4a exploration — file path + relevant line range>
 
 ## Interfaces / contracts to conform to
-<relevant signatures, types, or API shapes from Context Map>
+<relevant signatures, types, or API shapes from 4a exploration or contract registry>
 
 ## Affected tests
 <list of test files that cover this code — coder must keep these passing>
@@ -295,6 +370,11 @@ Rules:
 - Tests verify behavior through public interfaces, not implementation
 - Only mock at system boundaries (external APIs, databases, time)
 - Never mock internal collaborators
+
+## Cross-batch interfaces (if provided)
+<If the contract registry has entries relevant to this work group, include them here.
+Format: one line per entry — `file:InterfaceName — signature`. Omit this section if
+the registry is empty or has no relevant entries.>
 
 ## Constraints
 - Do not modify files outside the list above without noting it
@@ -318,6 +398,27 @@ Rules:
 - dangerouslySetInnerHTML without DOMPurify sanitization
 - Async effects without cancellation — stale closures setting state from superseded requests
 
+**Python** (if any *.py files):
+- Mutable default arguments (`def f(items=[])`) — use `None` sentinel + assignment in body
+- Bare `except Exception` swallowing errors silently — always log or re-raise
+- `os.system()` or `subprocess.run(shell=True)` with user input — command injection vector
+- Missing `async`/`await` on coroutines — silent coroutine-never-awaited bugs
+- `open()` without context manager — resource leaks on exception paths
+
+**NanoClaw** (if NanoClaw stack detected):
+- Missing position limits or risk gates before broker calls — real capital at risk
+- Hardcoded API keys or secrets outside environment variables
+- Missing rate limiting on broker/exchange API calls — can trigger bans
+- State not persisted to CLAUDE.md before container teardown — data loss on restart
+- IPC handlers without input validation — injection from untrusted container messages
+
+**OpenClaw** (if OpenClaw stack detected):
+- Missing pre-trade risk gate checks (drawdown limit, position size, daily loss cap)
+- Broker API calls without retry/timeout — hung orders in production
+- State reconciliation missing after crash recovery — phantom or orphaned positions
+- Capital allocation without checking aggregate exposure across all agents
+- Missing circuit breaker for aggregate portfolio drawdown
+
 **Universal** (always include):
 - Hardcoded secrets, API keys, or credentials in source
 - Check-then-act patterns without atomicity (read-branch-write without lock/transaction)
@@ -325,10 +426,18 @@ Rules:
 
 <include only the stack-specific bullets that match + universal. If files are mixed, include all matching stacks.>
 
+## Self-test before reporting
+Run the affected tests before reporting back:
+  <the orchestrator inserts the literal test command here>
+Fix any failures before reporting. Only report back once tests pass.
+
 ## Completion report format
 When done, output:
   FILES_CHANGED: <comma-separated list>
   TESTS_TO_RUN: <comma-separated test file paths>
+  SELF_TEST: PASS | FAIL (with details if FAIL — means you couldn't fix it yourself)
+  NEW_INTERFACES: <list any new public types, interfaces, or API endpoints introduced,
+    with their signatures — e.g. "FooService.validate(input: FooInput): ValidationResult">
   NOTES: <anything unusual the reviewer or orchestrator should know>
 ```
 
@@ -341,12 +450,50 @@ sub-agent types (Coder, Reviewer, Architect) — count every running agent towar
 the cap. The reason: builds, tests, Docker, and Gradle compete for system
 resources and thrash when too many agents run simultaneously.
 
+**Sub-agent failure handling:**
+If a Coder sub-agent times out, crashes, or returns output that does not contain
+the expected `FILES_CHANGED:` completion report:
+1. Log the raw output (or timeout/error message) for the user.
+2. Retry **once** — spawn the same Coder prompt again.
+3. If the retry also fails to produce a parseable completion report, mark the task
+   as `blocked`, log the failure, and continue to the next work group or batch.
+   Do not attempt to manually implement or diagnose the failure yourself.
+4. Report all blocked tasks in the Step 8 summary.
+
+**SELF_TEST: FAIL handling:**
+If a Coder reports `SELF_TEST: FAIL`, it means the coder made changes but could
+not get its own tests to pass. Do NOT skip the reviewer — send the work to the
+Reviewer anyway, but prepend this to the reviewer prompt:
+```
+## Warning: Coder's self-test failed
+The coder reported SELF_TEST: FAIL with these details: <details from report>
+Pay special attention to test failures and whether the implementation is
+fundamentally flawed vs. a minor test issue.
+```
+The reviewer's verdict determines next steps as normal (fix loop or pass).
+
+**User abort handling:**
+If the user interrupts at any point, stop immediately. Print:
+```
+Orchestration interrupted. All changes since START_COMMIT (<short hash>) are
+in the working tree.
+  To review: git diff <START_COMMIT>..HEAD
+  To keep:   continue working from current state
+  To undo:   git reset <START_COMMIT>
+```
+
 **CRITICAL RULE — REVIEWER IS MANDATORY AFTER EVERY CODER RUN:**
-When a Coder reports back, you MUST NOT inspect files yourself, run tests,
-or declare the work done. The only permitted next action is spawning the Reviewer.
-This applies even if the Coder reports "all tests pass" or "implementation complete"
-— the Coder's self-assessment is not a substitute for an independent review.
-Proceed to 4c immediately after every Coder completes, no exceptions.
+When a Coder reports back with a valid completion report, you MUST NOT inspect
+files yourself, run tests, or declare the work done. The only permitted next action
+is spawning the Reviewer. This applies even if the Coder reports "all tests pass"
+or "implementation complete" — the Coder's self-assessment is not a substitute for
+an independent review. Proceed to 4c immediately after every Coder completes.
+
+**Scoped exception — Step 4e test-fix only:** When a Coder is spawned in Step 4e
+solely to fix failing tests (after the Reviewer already issued PASS on the
+implementation), that test-fix Coder does NOT require a Reviewer cycle. Re-run
+the tests directly. The Reviewer already approved the implementation logic — the
+remaining issue is purely mechanical test fixing.
 
 ---
 
@@ -354,8 +501,16 @@ Proceed to 4c immediately after every Coder completes, no exceptions.
 
 After all coders in the batch report back, collect:
 - `FILES_CHANGED` from each completion report
-- The git diff for those files: `git diff HEAD -- <files>`
+- `SELF_TEST` result and `NEW_INTERFACES` from each completion report
+- The git diff for those files with extended context: `git diff -U30 HEAD -- <files>`
+  (30 lines of context instead of the default 3 — gives the reviewer visibility into
+  surrounding code for control flow, transaction boundaries, and class structure)
 - The original spec excerpt for each work group
+
+**Diff size management:** If the diff exceeds ~500 lines, reduce context to
+`git diff -U10`. If still >800 lines, split into per-file reviewer dispatches
+(one reviewer per file group, max 3 parallel). This prevents overloading the
+reviewer's context window, which degrades review quality on long diffs.
 
 Construct a **self-contained reviewer prompt**:
 
@@ -365,6 +520,15 @@ Review the implementation of the following work group(s) against the spec.
 
 ## Spec excerpt(s)
 <verbatim spec sections — one per work group>
+
+## Coder self-test result
+<SELF_TEST value from completion report — PASS or FAIL with details.
+If FAIL, the reviewer should weight test-related issues as CRITICAL.>
+
+## New interfaces introduced
+<NEW_INTERFACES from completion report, if any. Verify naming, parameter types,
+return types, and consistency with existing project conventions. These become
+cross-batch contracts — design flaws here propagate downstream.>
 
 ## Diff to review
 <output of git diff for changed files>
@@ -406,7 +570,7 @@ SUMMARY: <1–3 sentence plain-English summary>
 
 Parse the reviewer's output:
 
-**If VERDICT: PASS** → proceed to 4f (targeted tests).
+**If VERDICT: PASS** → proceed to 4e (targeted tests).
 
 **CRITICAL RULE — NO SELF-REVIEW:**
 After any Coder fix (whether from a simple fix loop or an architect→coder cycle),
@@ -415,20 +579,24 @@ the reviewer. Reading files to "check the fix looks right" before spawning the
 Reviewer is a violation. Spawn the Reviewer unconditionally and let it determine
 PASS or FAIL.
 
+**Cycle counter:** Maintain a single counter per work group, starting at 0. Every
+Coder→Reviewer round increments it by 1, regardless of whether the path is simple
+or complex. Max **3 cycles total** — if the path switches from simple to complex
+mid-way, the counter does NOT reset.
+
 **If VERDICT: FAIL and COMPLEX_ISSUES: NO:**
 1. Spawn a **Coder** sub-agent with a fix prompt (see below).
 2. **YOU MUST spawn the Reviewer** with the updated `git diff`. No exceptions.
-3. Return to the top of 4d with the new verdict.
-4. Repeat up to **3 cycles** total.
-5. After 3 cycles: CRITICAL issues remaining → stop and report to user;
+3. Return to the top of 4d with the new verdict. Increment cycle counter.
+4. After 3 cycles: CRITICAL issues remaining → stop and report to user;
    WARNING/INFO issues that persist are logged but do not block.
 
 **If VERDICT: FAIL and COMPLEX_ISSUES: YES:**
 1. Spawn an **Architect** sub-agent (see Step 5) to produce a fix plan.
 2. Spawn a **Coder** sub-agent with the Architect's plan as the spec.
 3. **YOU MUST spawn the Reviewer** with the updated `git diff`. No exceptions.
-4. Return to the top of 4d with the new verdict.
-5. This architect→coder→review loop also has a max of **3 cycles** total.
+4. Return to the top of 4d with the new verdict. Increment cycle counter.
+5. Same 3-cycle max applies — architect escalation does not reset the counter.
 
 In both paths, the cycle is always: **Coder → Reviewer → verdict → repeat or proceed.**
 There is no shortcut where the orchestrator inspects files and declares the fix done.
@@ -442,6 +610,10 @@ The reviewer found issues in the following implementation. Fix them.
 ## Original spec excerpt
 <same spec excerpt given to the original coder>
 
+## Success criteria (from spec)
+<same success criteria given to the original coder — the coder needs to know
+what "correct" looks like, not just what's broken>
+
 ## Current diff (what was implemented)
 <git diff>
 
@@ -451,11 +623,28 @@ The reviewer found issues in the following implementation. Fix them.
 ## Files to modify
 <FILES_CHANGED from the original coder + any files referenced in issues>
 
+## Watch for
+<same stack-specific warnings as the original coder prompt>
+
+## Self-test before reporting
+Run the affected tests before reporting back:
+  <literal test command inserted by orchestrator>
+Fix any failures before reporting. Only report back once tests pass.
+
 ## Constraints
 - Address every CRITICAL issue
 - Address WARNING issues unless doing so would violate the spec
 - Do not change anything outside the scope of the listed issues
-- Output the same completion report format as before
+- Output the same completion report format as before (including SELF_TEST field)
+```
+
+**Fix-cycle reviewer enrichment:** When spawning the Reviewer after a fix cycle
+(iteration 2+), include the **previous reviewer's ISSUES list** in the prompt
+as an additional section:
+```
+## Previously flagged issues (verify these are resolved)
+<ISSUES list from the prior review iteration — the reviewer should confirm each
+CRITICAL item was actually addressed, not just that the new diff looks okay>
 ```
 
 ---
@@ -463,11 +652,11 @@ The reviewer found issues in the following implementation. Fix them.
 #### 4e. Targeted test run
 
 After the reviewer issues PASS (or all cycles are exhausted), run only the tests
-that were created or modified in this cycle:
+that were created or modified in this cycle using the `TEST_CMD` resolved in
+Step 1.5:
 
 ```bash
-# Example — adapt to the project's test runner
-npx jest --testPathPattern="<TESTS_TO_RUN joined by |>" --no-coverage
+<resolved TEST_CMD with TESTS_TO_RUN>
 ```
 
 If tests fail:
@@ -483,6 +672,36 @@ Do **not** run the full test suite here.
 
 Mark all tasks in the batch as `completed` via `TaskUpdate`. Log a one-line
 summary of what was done and any persisted WARNING/INFO issues.
+
+**Update the contract registry:** For each coder completion report that includes
+`NEW_INTERFACES`, add an entry to the contract registry:
+```
+{ file: "src/FooService.java", name: "FooService.validate", signature: "(FooInput): ValidationResult" }
+```
+Keep entries minimal — just enough for downstream coders to conform to the
+interface without re-reading the file. Max 5 entries per batch.
+
+**Staleness check:** If a coder's `FILES_CHANGED` includes a file that already
+has an entry in the contract registry, the existing entry may be stale. Remove
+or update it based on the coder's `NEW_INTERFACES` output. If the coder didn't
+report `NEW_INTERFACES` for that file, remove the old entry — it's safer to
+force a re-read than to propagate a stale signature.
+
+**Progress update:** Print a progress line for the user:
+```
+Batch 2/4 complete: 5/10 tasks done, 0 blocked. [elapsed: ~3m]
+```
+This keeps the user informed during long orchestration runs.
+
+**Rollback note:** If a batch is blocked (tasks could not be completed after
+exhausting fix cycles), print a rollback hint:
+```
+⚠ Batch 3 blocked — 2 tasks could not be resolved.
+All changes since START_COMMIT (<short hash>) are in the working tree.
+To review: git diff <START_COMMIT>..HEAD
+To undo all orchestration changes: git reset <START_COMMIT>
+Completed batches 1-2 are included in the diff — review before resetting.
+```
 
 Proceed to the next batch.
 
@@ -595,14 +814,17 @@ subsequent Coder fix prompt (Step 4d).
 ### Step 6 — Final verification gate
 
 After **all batches** complete successfully, run the full targeted test set one
-final time — all test files that were touched across the entire session:
+final time — all test files that were touched across the entire session, using
+the resolved `TEST_CMD`:
 
 ```bash
-npx jest --testPathPattern="<all TESTS_TO_RUN across all batches joined by |>" --no-coverage
+<resolved TEST_CMD with all TESTS_TO_RUN aggregated across all batches>
 ```
 
 If this fails, report the failure and do not proceed to documentation. Leave tasks
 in their `completed` state so `--resume` can re-enter at the right point.
+
+**On success:** Mark the `final-verification-gate` sentinel task as `completed`.
 
 Do **not** run a full build or full test suite.
 
@@ -622,8 +844,8 @@ work units, performance anti-patterns that emerge from the combination of change
 Gather the aggregate diff and file list across all batches:
 
 ```bash
-git diff <commit-before-orchestration>..HEAD          # Full diff of all changes
-git diff <commit-before-orchestration>..HEAD --stat   # File summary
+git diff $START_COMMIT          # Full diff: start commit vs working tree (captures uncommitted changes)
+git diff $START_COMMIT --stat   # File summary
 ```
 
 If the aggregate diff is too large (>500 lines), focus each specialist on the files
@@ -690,9 +912,15 @@ implementation. Fix them without breaking existing functionality.
 - If a fix requires an architectural change, note it and implement the
   minimal safe fix instead
 
+## Self-test before reporting
+Before producing your completion report, run the affected tests yourself:
+  <literal test command inserted by orchestrator>
+If tests fail, fix them before reporting. Only report back once your own tests pass.
+
 ## Completion report format
 FILES_CHANGED: <comma-separated list>
 TESTS_TO_RUN: <comma-separated test file paths>
+SELF_TEST: PASS | FAIL (with details if FAIL)
 NOTES: <anything the orchestrator should know>
 ```
 
@@ -711,6 +939,9 @@ unless the user explicitly requests it.
 - **Max 2 coder fix cycles** for critical findings
 - **Max 2 targeted test runs** after fixes
 - No architect escalation — specialist fixes should be surgical
+
+**On completion** (whether fixes were needed or not): Mark the
+`specialist-review-gate` sentinel task as `completed`.
 
 ---
 
@@ -750,6 +981,7 @@ Update project documentation to reflect the changes made in this orchestration r
 
 Plan: <plan-file>
 Scope: <scope expr or "all">
+START_COMMIT: <short hash>
 
 | Batch | Work Groups | Coder Runs | Review Cycles | Architect? | Issues: C/W/I | Tests |
 |-------|-------------|------------|---------------|------------|---------------|-------|
@@ -777,7 +1009,11 @@ Unresolved specialist findings: <list or none>
 ```
 
 If any tasks are blocked, list each with the last reviewer SUMMARY so the user
-knows exactly what needs attention.
+knows exactly what needs attention. Include the rollback hint:
+```
+To review all changes: git diff <START_COMMIT>..HEAD
+To undo all orchestration changes: git reset <START_COMMIT>
+```
 
 If specialist reviews ran, list any unresolved WARNING findings with file:line
 references so the user can address them manually if desired.

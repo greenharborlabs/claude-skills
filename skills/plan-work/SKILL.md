@@ -1,6 +1,6 @@
 ---
 name: plan-work
-version: 1.3.0
+version: 1.5.0
 description: |
   Battle-tested plan creator. Combines architect-level codebase exploration with
   independent architect sub-agent review and a confidence-gated feedback loop to
@@ -163,9 +163,10 @@ If `--mode auto` or unspecified, resolve:
 
 Tell the user which mode was selected and why.
 
-### 1b. Scoping Questions (2-4 AskUserQuestion calls)
+### 1b. Scoping Questions (1-4 AskUserQuestion calls)
 
-**Q1 (always): Scope intent.**
+**Q1 (skip if Phase 0 ran): Scope intent.**
+Skip if the discovery brief already classifies scope (it always will). Otherwise ask:
 "What best describes this work?" Options:
 - A) New capability (greenfield)
 - B) Enhancement to existing feature
@@ -193,8 +194,8 @@ Use lettered options. One issue per question.
 
 ### 1c. Agent Suite Resolution
 
-Resolve the architect agent type for Phase 4 review. If not obvious from mode/description,
-auto-detect by scanning the project:
+Resolve the **primary** architect agent type for Phase 4 review. If not obvious from
+mode/description, auto-detect by scanning the project:
 
 | Signal | Architect Agent |
 |--------|----------------|
@@ -207,6 +208,15 @@ auto-detect by scanning the project:
 Quick detection: **max 2 Glob calls**. Use project root file patterns — do not read files
 for this step. Print: `Architect: <agent-type> (detected from: <signal>)`
 
+**Secondary stack detection:** If the Glob calls reveal files from **two or more** stack
+families (e.g., both `*.java` and `*.tsx`), record the secondary architect type. The
+secondary architect will be spawned in Phase 4 with a reduced scope (see Phase 4a½).
+Print: `Secondary architect: <agent-type> (detected from: <signal>)`
+
+Only record a secondary stack if the plan's description or Phase 2 exploration touches
+files in both stacks. A monorepo with backend + frontend code does not trigger secondary
+review unless the plan itself crosses the boundary.
+
 ---
 
 ## Phase 2: Codebase Exploration
@@ -217,8 +227,10 @@ Read-only. No user interaction. Strict budget to protect context.
 ```bash
 git log --oneline -20          # Recent history
 git diff main --stat           # What's already changed
+git rev-parse --short HEAD     # Current commit hash (record for plan staleness detection)
 ```
 Read CLAUDE.md, TODOS.md, and any existing architecture/plan docs.
+Record the current commit hash — it will be written into the plan header for staleness detection.
 
 ### 2a½. Review Report Ingestion
 
@@ -317,9 +329,35 @@ sub-items. This is the format that `/orchestrate` parses (Rule A).
 
 ### 3b. Write Draft to Output Path
 
-After drafting, write the plan to the output path using the Write tool. The architect
+Before writing, check if a file already exists at the output path. If it does, present
+via AskUserQuestion: "A plan already exists at `<path>`. (A) Overwrite it (B) Choose a
+different path (C) Read it first and build on it." Do not overwrite silently — the
+existing plan may be partially executed.
+
+After resolving, write the plan to the output path using the Write tool. The architect
 sub-agent in Phase 4 needs to read this file. Create the parent directory if needed
 (`mkdir -p`).
+
+### 3c. Plan Size Check
+
+After writing the draft, count waves and work units. If the plan exceeds **4 waves or
+15 work units**, present via AskUserQuestion:
+
+"This plan has N waves and M work units, which may be too large for a single orchestrate
+run. How should we proceed?"
+- A) **Split into multiple plans** — I'll identify a natural boundary and produce two
+  smaller plans, each independently orchestrate-able
+- B) **Cut to MVP scope** — I'll trim to the minimal version that delivers core value,
+  moving cut items to NOT in Scope
+- C) **Proceed as-is** — the scope is intentional
+
+This check fires before the architect review (Phase 4), since it's cheaper to trim scope
+before spawning the sub-agent. If the user chooses A, re-draft and write both plan files
+before proceeding — each gets its own Phase 4 architect review. If B, re-draft the
+trimmed plan in place.
+
+**Eng mode:** Use stricter thresholds — **3 waves or 10 work units** — since eng-mode
+plans should be lean by nature.
 
 ---
 
@@ -349,6 +387,11 @@ Read the plan file at: <output-path>
 
 ## Original Request
 <paste the user's original description here>
+
+## Discovery Brief (if Phase 0 ran — omit this section otherwise)
+<paste the discovery brief here — scope, approach, key decisions, constraints>
+These decisions have been resolved with the user. Do NOT re-question them. Instead,
+verify the plan implements them correctly.
 
 ## Your Task
 Perform an independent review of this plan using your own codebase exploration.
@@ -446,14 +489,62 @@ Security:        [HIGH|MEDIUM|LOW] — [one-line reason]  (skip in eng mode)
 3 dimensions (Architecture, Error Handling, Test Strategy) if the plan has ≤ 3 work
 units and touches ≤ 5 files.
 
+### 4a½. Secondary Architect Review (Cross-Stack Plans Only)
+
+**Skip this step if no secondary stack was detected in Phase 1c.**
+
+If a secondary architect type was recorded, spawn it in parallel with (or after) the
+primary architect using a **reduced-scope prompt**:
+
+```
+You are reviewing a cross-stack implementation plan from the perspective of the
+<secondary-stack> layer. A primary architect is reviewing the full plan — your
+role is to catch issues specific to the <secondary-stack> code that the primary
+architect may not have domain expertise for.
+
+## Plan Under Review
+Read the plan file at: <output-path>
+
+## Your Scope
+Focus ONLY on work units that touch <secondary-stack> files (e.g., *.tsx, *.java).
+Skip work units that are purely in the other stack.
+
+## Reduced Checklist (items 1-3 only)
+1. Blast-Radius Analysis — for <secondary-stack> files only
+2. Missing Work Units — anything missing from the <secondary-stack> perspective
+3. Acceptance Criteria Depth — for <secondary-stack> work units
+
+## Reduced Budget
+- **Max 6 file reads** (targeted line ranges preferred)
+- **Max 4 Glob/Grep searches**
+
+## Return Format
+Use the same ARCHITECT REVIEW format as the primary architect, but prefix findings
+with [SECONDARY] so they can be distinguished during merge.
+
+CONFIDENCE SCORES (secondary perspective only):
+Architecture:    [HIGH|MEDIUM|LOW] — [one-line reason, from <secondary-stack> view]
+Test Strategy:   [HIGH|MEDIUM|LOW] — [one-line reason, from <secondary-stack> view]
+```
+
+The secondary architect scores only 2 dimensions. These do NOT replace the primary
+architect's scores — they supplement them. If the secondary architect scores a dimension
+lower than the primary, use the **lower** score (conservative merge).
+
 ### 4b. Parse Architect Findings
 
-When the architect sub-agent returns, parse its structured output into:
+When the architect sub-agent(s) return, parse structured output into:
 - **CRITICAL findings** — must be resolved before shipping
 - **IMPORTANT findings** — should be incorporated
 - **MINOR findings** — incorporate if easy, otherwise defer
 - **Missing work units** — add to appropriate waves
 - **Confidence scores** — feed into Phase 4.5
+
+**Cross-stack merge:** If a secondary architect returned findings, merge them with the
+primary architect's findings. Deduplicate: if both architects flag the same issue, keep
+the higher-severity version. For confidence scores, use the **lower** score when both
+architects assessed the same dimension (conservative approach). Tag merged secondary
+findings with `[secondary]` in the Architect Review Findings section of the plan.
 
 ---
 
@@ -461,39 +552,6 @@ When the architect sub-agent returns, parse its structured output into:
 
 This phase takes the architect's independent findings and uses them to improve the plan,
 then runs a quality gate before output.
-
-### Pipeline Position
-
-```
-Phase 0 (Requirements Discovery — conditional)
-    │
-Phase 1 (Intake + Scoping + Agent Suite Resolution)
-    │
-Phase 2 (Codebase Exploration)
-    │
-Phase 3 (Draft Plan — written to output path)
-    │
-Phase 4 (Architect Sub-Agent Review — independent)
-    │
-    ▼
-┌─────────────────────────────────────────────────────┐
-│  Phase 4.5: INCORPORATE + CONFIDENCE GATE           │
-│                                                     │
-│  1. Auto-incorporate IMPORTANT/MINOR findings       │
-│  2. Add missing work units to plan                  │
-│  3. Score confidence from architect's assessment     │
-│  4. Present findings + confidence map to user        │
-│  5. CRITICAL → AskUserQuestion for resolution        │
-│  6. Re-draft affected sections                       │
-│  7. Re-score, loop if needed (max 2 rounds)          │
-│                                                     │
-│  Gate passes when all dimensions ≥ MEDIUM            │
-│  and all CRITICAL findings resolved                  │
-└────────────────────────┬────────────────────────────┘
-                         │
-                         ▼
-                  Phase 5: Output
-```
 
 ### Confidence Dimensions
 
@@ -561,8 +619,11 @@ For LOW dimensions without a CRITICAL finding attached, present the uncertainty
 via AskUserQuestion with options.
 
 **Max 2 AskUserQuestion calls per gate round.** If more CRITICAL items exist than
-budget allows, prioritize by impact:
+budget allows, prioritize by impact. Default order:
 Architecture > Error Handling > Test Strategy > Data Flow > Security.
+Adjust based on the plan's primary concern: if security-focused (auth, encryption,
+access control), promote Security to first. If data-migration-focused, promote
+Data Flow. The default order applies for general feature work.
 
 Remaining CRITICAL items → add to `## Open Questions` with the architect's evidence.
 
@@ -592,7 +653,11 @@ IF round = 2 AND (any dimension still LOW OR unresolved CRITICAL findings):
 
 If all dimensions score HIGH and there are no CRITICAL findings:
 - Print the confidence map (all HIGH) for visual confirmation
-- List what the architect verified (gives the user confidence the review was real)
+- List the architect's top 3 verification actions as evidence the review was substantive.
+  Pull these from the architect's return output. Examples: "Verified 8 consumers of
+  FooService.process() are covered by work units", "Confirmed W1-02 has no dependency
+  on W1-01 — wave ordering correct", "Checked migration backward compatibility with
+  existing schema". Do not just say "architect review passed" — show the work.
 - Skip interaction, proceed directly to Phase 5
 
 ---
@@ -629,6 +694,7 @@ Plan written to: <path>
 Mode: <ceo|eng>
 Waves: N | Work units: M
 Architect: <agent-type> — N findings (N critical, N important, N minor)
+Secondary architect: <agent-type or "none"> — N findings (if applicable)
 Missing work units added: N
 Confidence: Architecture=HIGH, Errors=HIGH, Tests=MEDIUM, Data=HIGH, Security=HIGH
 Gate: Passed round N (N unresolved items)
@@ -644,6 +710,8 @@ Orchestration playbook included — run wave-by-wave or all at once:
 ```markdown
 # [Plan Title]
 
+**Created at:** `<short-commit-hash>` on `<date>` | **Mode:** `<ceo|eng>`
+
 ## Summary
 [2-3 sentences: what this plan does and why]
 
@@ -656,6 +724,10 @@ CURRENT STATE          THIS PLAN              12-MONTH IDEAL
 
 ## Architecture
 [ASCII diagram of component relationships — new components and their relationships to existing ones]
+
+## Data Flow *(--spec only)*
+[Per-wave ASCII diagrams showing request/data flow through new and modified components.
+ Include happy path and key error paths with branch points marked.]
 
 ## Blast Radius
 [For each file/interface being modified: list all known callers, consumers, and dependents.
@@ -676,9 +748,14 @@ CURRENT STATE          THIS PLAN              12-MONTH IDEAL
 - [Specific checkable condition]
 - [Another condition]
 **Error handling:** [Named failures + expected behavior]
+**Error & rescue table:** *(--spec only)*
+| Method/Codepath | Failure Mode | Rescue Behavior | HTTP Status |
+|-----------------|-------------|-----------------|-------------|
+| ...             | ...         | ...             | ...         |
 **Tests:** [Type + what to test]
 **Test spec:**
 - [Concrete behavioral test case]
+**Effort:** *(--spec only)* S|M|L
 
 ### W1-02: [Work unit title]
 ...
@@ -690,6 +767,10 @@ CURRENT STATE          THIS PLAN              12-MONTH IDEAL
 
 ## NOT in Scope
 - [Deferred item] — [one-line rationale]
+
+## Security Considerations *(--spec only)*
+[Attack surface introduced by this plan. Auth boundaries, input validation points,
+ injection surfaces, and trust boundaries. Map each to the work unit that addresses it.]
 
 ## Failure Modes Summary
 
@@ -745,12 +826,12 @@ Or execute the entire plan at once:
 
 ### --spec Additions
 
-When `--spec` is passed, the plan file additionally includes:
-- Full data flow ASCII diagrams per wave (not just architecture-level)
-- Error & rescue table per work unit (method-level failure mapping)
-- Security considerations section (attack surface, auth boundaries)
-- Detailed test specifications (test case outlines, not just "what to test")
-- Effort estimates per work unit (S/M/L)
+When `--spec` is passed, include the sections and fields marked `*(--spec only)*` in the
+plan template above. These are integrated at their natural positions:
+- `## Data Flow` — after Architecture (per-wave ASCII diagrams)
+- `**Error & rescue table:**` — per work unit, after Error handling
+- `**Effort:**` — per work unit, after Test spec (S/M/L sizing)
+- `## Security Considerations` — after NOT in Scope
 
 ---
 
@@ -775,8 +856,9 @@ When `--spec` is passed, the plan file additionally includes:
    scores. If you disagree with a score, note it in the refinement log but use the
    architect's score for the gate decision. LOW means the architect found genuine gaps.
 8. **Architect prompt must be self-contained.** The sub-agent has no memory of your context.
-   Include the plan file path, the original user description, the review checklist, and
-   the exploration budget. Do not assume it knows anything.
+   Include the plan file path, the original user description, the discovery brief (if
+   Phase 0 ran), the review checklist, and the exploration budget. Do not assume it knows
+   anything.
 9. **Gate question budget.** Max 2 AskUserQuestion calls per gate round, max 2 rounds.
    Prioritize by impact if more CRITICAL findings than budget allows.
 10. **Phase 0 discipline.** Discovery questions must target plan-forking decisions only.
@@ -787,17 +869,36 @@ When `--spec` is passed, the plan file additionally includes:
     findings.
 12. **Blast radius is mandatory.** Every plan must include a Blast Radius section mapping
     modified files/interfaces to their consumers. The architect verifies this independently.
+13. **Test specs require concrete input/output pairs.** Test specs MUST include specific
+    inputs and expected outputs, not just behavioral descriptions. BAD: "test that validation
+    works". GOOD: "input: {amount: -1}, expected: 400 with {error: \"amount must be positive\"}".
+    The coder writes these as failing tests FIRST — vague specs produce vague tests.
+    Include at least one happy path and one rejection case per work unit.
+14. **CLAUDE.md constraints flow into acceptance criteria.** Extract hard constraints from
+    CLAUDE.md (e.g., dependency policy, security posture, naming conventions) and thread
+    them into relevant work unit acceptance criteria. If CLAUDE.md says "zero unnecessary
+    dependencies", any work unit adding a dependency must include a criterion justifying it.
+15. **Plan size guardrails.** CEO: >4 waves or >15 work units triggers a size check.
+    Eng: >3 waves or >10 work units. Ask the user to split, cut to MVP, or confirm scope
+    before proceeding to architect review. Trim before review, not after.
+16. **Cross-stack plans get secondary review.** If Phase 1c detects a secondary stack AND
+    the plan touches files in both stacks, spawn a secondary architect with a reduced
+    checklist (items 1-3, 2 scores). Merge findings conservatively — use the lower score
+    when both architects assess the same dimension. The secondary review is scoped to its
+    stack's files only and does not duplicate the primary review.
 
 ## Mode Quick Reference
 
 ```
               CEO                          ENG
 Discovery     Phase 0 if brief input       Phase 0 if brief input
-Scope Q       Q1-Q3 (+ ambition)          Q1-Q2 only
+Scope Q       Q1-Q3 (+ ambition)          Q1-Q2 only (Q1 skipped if Phase 0 ran)
 Exploration   12 files + sweep + taste     8 files + sweep, no calibration
 Premise       Full (right problem?)         Complexity check only
 Draft         Dream state + phase 2 ideas  Complexity justification
+Size check    >4 waves or >15 units        >3 waves or >10 units
 Architect     6-item checklist, 5 scores   Items 1-4 only, 3 scores
+2nd architect If cross-stack (items 1-3)   If cross-stack (items 1-3)
 Gate          5 dimensions, max 2 rounds   3 dimensions, max 2 rounds
 Output        Rich, forward-looking        Lean, execution-focused
 ```
@@ -806,15 +907,15 @@ Output        Rich, forward-looking        Lean, execution-focused
 
 ```
 Phase 0:   0-6 questions  (requirements discovery — conditional, skipped if input is detailed)
-Phase 1:   2-4 questions  (scoping — always fires, Q4 skipped if Phase 0 ran)
+Phase 1:   1-4 questions  (scoping — Q1 skipped if Phase 0 ran, Q4 skipped if Phase 0 ran)
 Phase 2:   0              (read-only, no interaction)
-Phase 3:   0              (drafting, no interaction)
+Phase 3:   0-2 questions  (drafting — output path conflict + size check, both conditional)
 Phase 4:   0              (architect sub-agent — runs independently, no user interaction)
 Phase 4.5: 0-4 questions  (confidence gate — 0-2 per round × max 2 rounds)
 Phase 5:   0              (output, no interaction)
 
-Typical run (with Phase 0):   8-10 questions total
+Typical run (with Phase 0):   7-9 questions total
 Typical run (without Phase 0): 4-6 questions total
-Worst case:  14 questions (brief input + complex CEO plan + 2 full gate rounds)
+Worst case:  13 questions (brief input + complex CEO plan + 2 full gate rounds)
 Best case:    2 questions (detailed input, clean eng fix, architect finds no critical issues)
 ```
