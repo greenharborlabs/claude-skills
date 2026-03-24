@@ -191,6 +191,8 @@ Using the **file list** from Step 2, classify into stacks and flags:
 ### Flag detection
 - **`security`** flag: any file path contains `Security`, `Auth`, `Filter`, `Token`, or `Credential` (case-insensitive), OR file content contains: `@PreAuthorize`, `SecurityFilterChain`, `HttpSecurity`, `jwt`, `oauth`
 - **`performance`** flag: file content contains: `@Repository`, `@Cacheable`, `RestTemplate`, `WebClient`, `@Transactional`, `@Query`, `@Async`, `connection pool`, `cache`
+- **`concurrency`** flag: file content contains: `synchronized`, `ReentrantLock`, `AtomicReference`, `AtomicInteger`, `AtomicLong`, `CompletableFuture`, `StructuredTaskScope`, `@Async`, `@Scheduled`, `ExecutorService`, `ThreadPoolTaskExecutor`, `ConcurrentHashMap`, `volatile`, `@Version`, `ShedLock`, `parallelStream`, `virtual.enabled`
+- **`api-contract`** flag: file content contains: `@RestController`, `@GetMapping`, `@PostMapping`, `@PutMapping`, `@DeleteMapping`, `@PatchMapping`, `@RequestMapping`, `@RequestBody`, `@PathVariable`, `@RequestParam`, `@ControllerAdvice`, `@ExceptionHandler`, `@Schema`, `@Operation`, `Pageable`, `@JsonProperty`, `@JsonAlias`
 
 Record which stacks and flags were detected. Multiple stacks can be active simultaneously.
 
@@ -220,6 +222,8 @@ Same as v2:
 - `java` detected → launch `backend-reviewer-java`
 - `java` + `security` flag → also launch `backend-security-reviewer-java`
 - `java` + `performance` flag → also launch `backend-performance-reviewer-java`
+- `java` + `concurrency` flag → also launch `backend-concurrency-reviewer-java`
+- `java` + `api-contract` flag → also launch `backend-api-contract-reviewer-java`
 - `react` detected → launch `frontend-reviewer`
 
 **Agent prompt for DIFF mode:**
