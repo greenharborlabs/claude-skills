@@ -25,7 +25,7 @@ You explore, reason, and coordinate. Sub-agents do all the heavy lifting.
 | **Performance Reviewer** | After all batches complete (Java only) | Reviews all changes for N+1 queries, blocking calls, missing backpressure, cache misuse |
 
 Agent types are resolved in Step 1.5 via auto-detection or explicit `--coder`/`--reviewer`/`--architect` flags.
-Specialist reviewers (security, performance) are resolved automatically for supported stacks.
+Specialist reviewers (security, performance, concurrency, API contract) are resolved automatically for supported stacks.
 
 ### Immutable constraints — no exceptions
 
@@ -203,13 +203,13 @@ Print: `Test command: <TEST_CMD>`
 
 **Specialist reviewers (auto-resolved, not overridable):**
 
-| Signal | Security Reviewer | Performance Reviewer |
-|--------|------------------|---------------------|
-| `*.java`, `*.gradle`, `pom.xml` | backend-security-reviewer-java | backend-performance-reviewer-java |
-| Other stacks | *(not yet available — skip Step 6.5)* | *(not yet available — skip Step 6.5)* |
+| Signal | Security Reviewer | Performance Reviewer | Concurrency Reviewer | API Contract Reviewer |
+|--------|------------------|---------------------|---------------------|----------------------|
+| `*.java`, `*.gradle`, `pom.xml` | backend-security-reviewer-java | backend-performance-reviewer-java | backend-concurrency-reviewer-java | backend-api-contract-reviewer-java |
+| Other stacks | *(not yet available — skip Step 6.5)* | *(not yet available — skip Step 6.5)* | *(not yet available — skip Step 6.5)* | *(not yet available — skip Step 6.5)* |
 
 If specialist reviewers are available for the detected stack, print:
-`Specialist reviewers: <security-type> + <performance-type> (post-completion)`
+`Specialist reviewers: <security-type> + <performance-type> + <concurrency-type> + <api-contract-type> (post-completion)`
 
 Use the resolved agent types for all subsequent Coder, Reviewer, and Architect
 dispatches throughout the workflow.
@@ -273,7 +273,7 @@ Group by dependency tier. Also print:
 ```
 Agent suite   : <coder> / <reviewer> / <architect>
 Test command  : <TEST_CMD>
-Specialists   : <security + performance types, or "none for this stack">
+Specialists   : <security + performance + concurrency + api-contract types, or "none for this stack">
 Est. min spawns: <(coders + reviewers) × batches — lower bound before fix cycles>
 ```
 Then **stop — do not execute**.
@@ -837,7 +837,8 @@ Do **not** run a full build or full test suite.
 After the final verification gate passes, spawn specialist reviewers to analyze ALL
 changes made during the entire orchestration run. These reviewers catch cross-cutting
 concerns that per-task reviewers miss — security vulnerabilities that span multiple
-work units, performance anti-patterns that emerge from the combination of changes, etc.
+work units, performance anti-patterns that emerge from the combination of changes,
+concurrency hazards across shared state, and API contract violations.
 
 #### 6.5a. Collect review context
 
@@ -851,10 +852,12 @@ git diff $START_COMMIT --stat   # File summary
 If the aggregate diff is too large (>500 lines), focus each specialist on the files
 most relevant to their domain. For security: controllers, auth filters, config,
 endpoints. For performance: repositories, services, queries, caching layers.
+For concurrency: services with shared state, scheduled tasks, async operations,
+caching. For API contract: controllers, DTOs, error handlers, OpenAPI specs.
 
 #### 6.5b. Spawn specialist reviewers in parallel
 
-Launch **both** specialist reviewers simultaneously via parallel Agent tool calls.
+Launch **all** specialist reviewers simultaneously via parallel Agent tool calls.
 They are fully independent and review different dimensions.
 
 **Specialist reviewer prompt template (same structure for both):**
@@ -886,7 +889,7 @@ checklists here. Provide context and output format only.
 
 #### 6.5c. Process specialist findings
 
-After both reviewers return, merge and deduplicate their findings.
+After all specialist reviewers return, merge and deduplicate their findings.
 
 **If both VERDICT: PASS** → Log findings summary, proceed to Step 7.
 
@@ -897,7 +900,7 @@ After both reviewers return, merge and deduplicate their findings.
 
 ```
 ## Specialist Review Fix Task
-Specialist reviewers (security + performance) found critical issues in the
+Specialist reviewers (security, performance, concurrency, API contract) found critical issues in the
 implementation. Fix them without breaking existing functionality.
 
 ## Issues to fix
@@ -935,7 +938,7 @@ unless the user explicitly requests it.
 
 #### 6.5d. Specialist review budget
 
-- **Max 1 security reviewer spawn + max 1 performance reviewer spawn** (parallel)
+- **Max 1 spawn per specialist reviewer** (security, performance, concurrency, API contract — all parallel)
 - **Max 2 coder fix cycles** for critical findings
 - **Max 2 targeted test runs** after fixes
 - No architect escalation — specialist fixes should be surgical
@@ -998,13 +1001,17 @@ Blocked tasks         : None / <list with reason>
 
 ## Specialist Reviews (if applicable)
 
-| Reviewer    | Verdict | Critical | Warning | Info | Fixes Applied |
-|-------------|---------|----------|---------|------|---------------|
-| Security    | PASS    | 0        | 2       | 1    | N/A           |
-| Performance | FAIL→PASS | 1      | 3       | 0    | 1 fix cycle   |
+| Reviewer     | Verdict | Critical | Warning | Info | Fixes Applied |
+|--------------|---------|----------|---------|------|---------------|
+| Security     | PASS    | 0        | 2       | 1    | N/A           |
+| Performance  | FAIL→PASS | 1      | 3       | 0    | 1 fix cycle   |
+| Concurrency  | PASS    | 0        | 1       | 0    | N/A           |
+| API Contract | PASS    | 0        | 0       | 2    | N/A           |
 
-Security summary  : <reviewer's SUMMARY>
-Performance summary: <reviewer's SUMMARY>
+Security summary    : <reviewer's SUMMARY>
+Performance summary : <reviewer's SUMMARY>
+Concurrency summary : <reviewer's SUMMARY>
+API Contract summary: <reviewer's SUMMARY>
 Unresolved specialist findings: <list or none>
 ```
 
