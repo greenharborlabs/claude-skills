@@ -1,6 +1,6 @@
 ---
 name: review
-version: 3.0.0
+version: 3.2.0
 description: |
   Universal code review with multiple modes: diff-based (default), full-project,
   scoped (package/service/directory), and endpoint-flow tracing. Detects tech stack,
@@ -15,6 +15,8 @@ allowed-tools:
   - Glob
   - Agent
   - AskUserQuestion
+  - TaskCreate
+  - TaskUpdate
 ---
 
 # Code Review
@@ -218,7 +220,6 @@ Based on mode and detected stacks, launch specialized reviewer agents **in paral
 
 ### DIFF mode — agent dispatch
 
-Same as v2:
 - `java` detected → launch `backend-reviewer-java`
 - `java` + `security` flag → also launch `backend-security-reviewer-java`
 - `java` + `performance` flag → also launch `backend-performance-reviewer-java`
@@ -228,7 +229,14 @@ Same as v2:
 
 **Agent prompt for DIFF mode:**
 ```
-Review this diff for production-readiness issues. Be terse — output ONLY findings in this exact format:
+Review this diff for production-readiness issues.
+
+For each class in the diff, actively trace:
+- Every constructor parameter → is the field actually read/called in any method? If not, it's dead weight.
+- Every injected dependency → is it used? Could it be derived from another already-injected dependency?
+- Every field with a setter → is the field read anywhere? A setter with no reader is dead state.
+
+Be terse — output ONLY findings in this exact format:
 
 [file:line] SEVERITY Problem description
 Fix: suggested fix
@@ -243,10 +251,15 @@ Diff:
 
 ### SCOPE mode — agent dispatch
 
-Determine the number of agents based on file count:
-- 1-10 files → 1 agent (matching the primary stack)
-- 11-25 files → 2 agents (primary stack reviewer + security or performance if flagged)
-- 26+ files → 3 agents (split files across agents by concern)
+Dispatch agents using the same flag-based pattern as DIFF mode:
+- `java` detected → launch `backend-reviewer-java`
+- `java` + `security` flag → also launch `backend-security-reviewer-java`
+- `java` + `performance` flag → also launch `backend-performance-reviewer-java`
+- `java` + `concurrency` flag → also launch `backend-concurrency-reviewer-java`
+- `java` + `api-contract` flag → also launch `backend-api-contract-reviewer-java`
+- `react` detected → launch `frontend-reviewer`
+
+Launch all agents **in parallel**.
 
 **Agent prompt for SCOPE mode:**
 ```
@@ -263,6 +276,8 @@ Be terse — output ONLY findings in this exact format:
 Fix: suggested fix
 
 Where SEVERITY is one of: CRITICAL, HIGH, MEDIUM, LOW
+
+Skip preamble, summaries, and "looks good" comments. Only flag real problems.
 
 Context files (read-only, for understanding dependencies — do NOT review these):
 <list context file paths>
@@ -321,7 +336,7 @@ Fix: suggested fix
 
 ### FLOW mode — agent dispatch
 
-Launch a single deep-review agent with the full call chain:
+Launch the detected stack's primary reviewer agent (`backend-reviewer-java` for Java, `frontend-reviewer` for React) with the full call chain. If no stack detected, use a `general-purpose` agent.
 
 **Agent prompt for FLOW mode:**
 ```
@@ -352,22 +367,67 @@ Flow files (in call-chain order):
 <for each file in the chain, include its full content with file path header and layer label>
 ```
 
-If `security` flag is detected, also launch `backend-security-reviewer-java` or `frontend-reviewer` (as appropriate) with the same flow files.
+Additionally, launch specialized agents based on detected flags (same pattern as DIFF mode), providing the flow files as review input:
+- `security` flag → launch `backend-security-reviewer-java` or `frontend-reviewer` (as appropriate)
+- `performance` flag → launch `backend-performance-reviewer-java`
+- `concurrency` flag → launch `backend-concurrency-reviewer-java`
+- `api-contract` flag → launch `backend-api-contract-reviewer-java`
+
+Launch all flag-based agents **in parallel** with the deep-review agent.
 
 ---
 
 ## Step 6: Checklist review
 
-This runs **in parallel** with agent dispatch, regardless of mode.
+How checklist review runs depends on the mode:
 
-Apply the loaded checklists against the **review input** (diff content, file content, or section content depending on mode):
+### DIFF, SCOPE, and FLOW modes
 
-1. **Pass 1 (CRITICAL):** Apply all CRITICAL checks from every loaded checklist.
-2. **Pass 2 (INFORMATIONAL):** Apply all INFORMATIONAL checks from every loaded checklist.
+Launch a **checklist review agent** in parallel with the Step 5 reviewer agents (include it in the same Agent tool-use turn). This ensures checklist review runs concurrently with specialized agent reviews.
 
-If `--critical-only` flag is set, skip Pass 2 entirely.
+**Agent prompt for checklist review:**
+```
+Apply the following review checklists against the provided code. Perform two passes:
+
+Pass 1 (CRITICAL): Apply all CRITICAL checks from every checklist.
+Pass 2 (INFORMATIONAL): Apply all INFORMATIONAL checks from every checklist.
+<if --critical-only flag is set, include: "Skip Pass 2 entirely.">
 
 Follow the suppressions from each checklist — do NOT flag suppressed items.
+
+Be terse — output ONLY findings in this exact format:
+
+[file:line] SEVERITY Problem description
+Fix: suggested fix
+
+Where SEVERITY is one of: CRITICAL, HIGH, MEDIUM, LOW
+
+Skip preamble, summaries, and "looks good" comments. Only flag real problems.
+
+Checklists:
+<paste full content of all loaded checklist files>
+
+Code to review:
+<review input: diff content, file content, or section content depending on mode>
+```
+
+Use the `general-purpose` agent type (not a specialized reviewer) and set the model to `sonnet` for speed.
+
+### FULL mode
+
+Do NOT launch a standalone checklist agent — the review input (all project source files) is too large for a single agent. Instead, append the checklist criteria to each section agent's prompt from Step 5. Add this block to the end of each section agent prompt:
+
+```
+Additionally, apply the following review checklists against the files in this section:
+<if --critical-only flag is set, include: "Apply only the CRITICAL checks. Skip INFORMATIONAL.">
+
+<paste full content of all loaded checklist files>
+
+Follow the suppressions from each checklist — do NOT flag suppressed items.
+Include checklist findings in the same output format as above.
+```
+
+This distributes checklist review across section agents, keeping each agent's input bounded.
 
 ---
 
@@ -495,7 +555,7 @@ Every finding as a copy-paste command, grouped by severity then ordered DESIGN b
 #### INFORMATIONAL
 ```bash
 # D3. <brief problem description>
-/plan-work "<Design description>"
+/plan-work --spec "<Design description>"
 
 # I3. <brief problem description>
 /orchestrate "<task description>"
@@ -623,10 +683,10 @@ If `--fix` is NOT set:
   - Options: **A: Fix it now**, **B: Acknowledge**, **C: False positive — skip**
 - For EACH critical **DESIGN** finding, use a separate `AskUserQuestion` with:
   - The problem and why it needs design
-  - Options: **A: Start `/plan-work` now**, **B: Acknowledge**, **C: False positive — skip**
+  - Options: **A: Acknowledge — I'll run `/plan-work` next**, **B: Acknowledge**, **C: False positive — skip**
 - After all critical questions are answered, output a summary of choices.
 - If the user chose A on any IMPL issue, apply the recommended fixes.
-- If the user chose A on any DESIGN issue, invoke the `/plan-work` skill with the suggested spec.
+- If the user chose A on any DESIGN issue, output the ready-to-run `/plan-work` command so the user can invoke it in their next prompt. Do NOT attempt to invoke `/plan-work` directly — the review skill should remain read-only.
 
 ---
 
