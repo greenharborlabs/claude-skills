@@ -1,6 +1,6 @@
 ---
 name: review
-version: 3.2.0
+version: 3.3.0
 description: |
   Universal code review with multiple modes: diff-based (default), full-project,
   scoped (package/service/directory), and endpoint-flow tracing. Detects tech stack,
@@ -240,6 +240,7 @@ Be terse — output ONLY findings in this exact format:
 
 [file:line] SEVERITY Problem description
 Fix: suggested fix
+Files: <comma-separated list of files the fix would touch>
 
 Where SEVERITY is one of: CRITICAL, HIGH, MEDIUM, LOW
 
@@ -274,6 +275,7 @@ Be terse — output ONLY findings in this exact format:
 
 [file:line] SEVERITY Problem description
 Fix: suggested fix
+Files: <comma-separated list of files the fix would touch>
 
 Where SEVERITY is one of: CRITICAL, HIGH, MEDIUM, LOW
 
@@ -306,6 +308,7 @@ Be terse — output ONLY findings in this exact format:
 
 [file:line] SEVERITY Problem description
 Fix: suggested fix
+Files: <comma-separated list of files the fix would touch>
 
 Where SEVERITY is one of: CRITICAL, HIGH, MEDIUM, LOW
 
@@ -360,6 +363,7 @@ Be terse — output ONLY findings in this exact format:
 
 [file:line] SEVERITY Problem description
 Fix: suggested fix
+Files: <comma-separated list of files the fix would touch>
 
 Where SEVERITY is one of: CRITICAL, HIGH, MEDIUM, LOW
 
@@ -399,6 +403,7 @@ Be terse — output ONLY findings in this exact format:
 
 [file:line] SEVERITY Problem description
 Fix: suggested fix
+Files: <comma-separated list of files the fix would touch>
 
 Where SEVERITY is one of: CRITICAL, HIGH, MEDIUM, LOW
 
@@ -465,7 +470,29 @@ A finding is **IMPL** (`/orchestrate`) if ALL of these apply:
 
 When in doubt, classify as DESIGN. It's better to plan first than to start coding without understanding the full picture.
 
-### 7c. Build the report
+### 7c. Group findings into parallel waves
+
+Before building the report, group findings into **waves** — sets of tasks that can be safely worked on in parallel because they touch different files.
+
+**Algorithm:**
+
+1. For each finding, determine its **file footprint** — the set of files the fix will touch:
+   - IMPL findings: the file(s) listed in the finding (typically 1-3 files)
+   - DESIGN findings: the file(s) listed plus any files mentioned in the "Why design needed" rationale. If the scope is unclear or cross-cutting, mark the finding as `unbounded` — it cannot be parallelized with anything.
+
+2. Build waves greedily within each resolution path (DESIGN and IMPL independently):
+   - Start with Wave 1 as empty, with an empty "claimed files" set.
+   - For each finding (ordered by severity: CRITICAL first, then INFORMATIONAL):
+     - If the finding is `unbounded`, assign it to its own solo wave.
+     - If NONE of the finding's footprint files overlap with the current wave's claimed files, add the finding to the current wave and add its files to claimed files.
+     - Otherwise, start a new wave and add the finding there.
+   - After all findings are assigned, compact: merge any waves whose claimed file sets don't overlap.
+
+3. Number waves sequentially across the entire report: Wave 1, Wave 2, etc. DESIGN waves come first, then IMPL waves. Within a wave, order by severity (CRITICAL before INFORMATIONAL).
+
+**Important:** The wave grouping is an optimization hint, not a hard constraint. If a finding's file footprint is ambiguous (e.g., "multiple files" with no specifics), be conservative and put it in its own wave.
+
+### 7d. Build the report
 
 **Build the report header** based on mode:
 - DIFF mode: `Diff Review (<baseline>): N issues (X critical, Y informational)`
@@ -489,16 +516,19 @@ These items need architectural thinking, trade-off analysis, or multi-file desig
 
 - **D1.** [file:line] Problem description
   Why design needed: <one line explaining why this can't be fixed surgically>
+  Files: <list of files this fix touches>
   Suggested: `/plan-work --spec "Design <brief description>"`
 
 - **D2.** [file:line] Problem description
   Why design needed: <one line>
+  Files: <list of files>
   Suggested: `/plan-work --spec "Design <brief description>"`
 
 ### INFORMATIONAL
 
 - **D3.** [file:line] Problem description
   Why design needed: <one line>
+  Files: <list of files>
   Suggested: `/plan-work --spec "Design <brief description>"`
 
 ---
@@ -511,16 +541,19 @@ These items are surgical, well-defined fixes that can go straight to implementat
 
 - **I1.** [file:line] Problem description
   Fix: <specific fix description>
+  Files: <list of files this fix touches>
   Suggested: `/orchestrate "<brief task description>"`
 
 - **I2.** [file:line] Problem description
   Fix: <specific fix description>
+  Files: <list of files>
   Suggested: `/orchestrate "<brief task description>"`
 
 ### INFORMATIONAL
 
 - **I3.** [file:line] Problem description
   Fix: <specific fix description>
+  Files: <list of files>
   Suggested: `/orchestrate "<brief task description>"`
 
 ---
@@ -535,30 +568,33 @@ These items are surgical, well-defined fixes that can go straight to implementat
 
 ### Action Playbook
 
-Every finding as a copy-paste command, grouped by severity then ordered DESIGN before IMPL.
+Every finding as a copy-paste command, grouped into **waves** of tasks that can be run in parallel. Tasks within a wave touch different files and are safe to run concurrently. Complete all tasks in a wave before starting the next wave.
 
-#### CRITICAL
+#### Wave 1 — <N> parallel tasks
 ```bash
-# D1. <brief problem description>
+# D1. <brief problem description>  [Files: FileA.java]
 /plan-work --spec "<Design description>"
 
-# D2. <brief problem description>
-/plan-work --spec "<Design description>"
-
-# I1. <brief problem description>
+# I1. <brief problem description>  [Files: FileC.java]
 /orchestrate "<task description>"
 
-# I2. <brief problem description>
+# I2. <brief problem description>  [Files: FileD.java, FileE.java]
 /orchestrate "<task description>"
 ```
 
-#### INFORMATIONAL
+#### Wave 2 — <N> parallel tasks
 ```bash
-# D3. <brief problem description>
+# D2. <brief problem description>  [Files: FileA.java, FileB.java]
 /plan-work --spec "<Design description>"
 
-# I3. <brief problem description>
+# I3. <brief problem description>  [Files: FileF.java]
 /orchestrate "<task description>"
+```
+
+#### Wave 3 — solo (unbounded scope)
+```bash
+# D3. <brief problem description>  [Files: cross-cutting]
+/plan-work --spec "<Design description>"
 ```
 ```
 
@@ -657,7 +693,7 @@ Flow Review (POST /api/orders): N issues
 
 If no issues found: `<Report Header>: No issues found.`
 
-### 7d. Write report
+### 7e. Write report
 
 **Always write to file** in SCOPE, FULL, and FLOW modes. Use `--out` path if specified, otherwise auto-generate at `reports/review-<mode>-<YYYY-MM-DD>.md` (for SCOPE mode with a single target, use `reports/review-scope-<scope-label>-<YYYY-MM-DD>.md` so the filename reflects the module). Create the `reports/` directory if needed.
 
