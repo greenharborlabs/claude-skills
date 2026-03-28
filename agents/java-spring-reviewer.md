@@ -87,6 +87,7 @@ For every file in review scope, you MUST scan imports and method calls. Do not s
 - Unused constants: `private static final` fields not referenced anywhere in the class
 - Unused private methods: methods declared but never called
 - Parameters stored as fields unnecessarily: constructor parameters kept as fields when they are only used during construction (e.g., passed to a delegate object)
+- **Constant/redundant method parameters**: For each private method with 2+ parameters, check every call site. If a parameter always receives the same value (e.g., always the same field, always `true`, always another parameter's value), it is redundant — the method should read the value directly from the field/context, or the parameter should be removed and the value inlined. This indicates either dead flexibility or a design issue where callers should be passing different values but aren't.
 
 ### 7. Spring Boot Architecture
 - Field injection (should use constructor injection)

@@ -66,6 +66,7 @@ Review the `git diff origin/main` output for Java/Spring-specific issues. Be spe
 - Unused fields, constants, imports, or local variables
 - Private methods never called from within the class
 - Unused method parameters (especially in non-interface implementations)
+- **Constant/redundant parameters**: For each private method, trace every call site. If a parameter is always passed the same value (same field, same literal, or always mirrors another parameter), the parameter is redundant — the method should read from the field/context directly, or the caller has a design issue. Common pattern: a method accepts `protocol` or `freshValidation` but every call site passes the same field value. Either inline the value or redesign the callers to pass distinct values.
 - Empty method bodies (other than intentional no-ops in abstract/template patterns)
 - Unused `@SuppressWarnings` annotations
 
@@ -109,6 +110,7 @@ Review the `git diff origin/main` output for Java/Spring-specific issues. Be spe
 - Logging sensitive data (passwords, tokens, PII) at any level
 - Missing `log.isDebugEnabled()` guard before expensive debug log construction
 - Catching and logging the same exception at multiple layers
+- Logging only `e.getMessage()` instead of the exception object — loses exception type, stack trace, and chained causes. Always pass the exception itself as the last argument: `log.warn("Failed to X", e)` not `log.warn("Failed to X: {}", e.getMessage())`
 
 **Resource Management:**
 - Streams, connections, readers/writers not in try-with-resources blocks

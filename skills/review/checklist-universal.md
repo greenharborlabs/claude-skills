@@ -54,6 +54,7 @@ Be terse. For each issue: one line describing the problem, one line with the fix
 - Imports/requires that are unused
 - Functions/methods defined but never called within the diff scope
 - Parameters declared but never referenced in the method body
+- **Constant/redundant parameters**: method parameters that receive the same value at every call site (same field, same literal, or always equal to another parameter) — the parameter is dead flexibility. Either inline the constant value inside the method, or it's a design issue where callers should be passing different values but aren't.
 - Private fields/methods that are never accessed
 - Unreachable code after `return`, `throw`, `break`, or `continue`
 - Dead branches: `if` conditions that are always true/false based on preceding logic
@@ -90,6 +91,7 @@ Be terse. For each issue: one line describing the problem, one line with the fix
 - Logging an exception and then re-throwing it (double logging)
 - Returning `null` from a method where a failure should throw or return an `Optional`/`Result`
 - Missing `finally` or try-with-resources for closeable resources (streams, connections, files)
+- Logging only `e.getMessage()` instead of the full exception — loses exception type, stack trace, and chained causes. Pass the exception object itself to the logger.
 
 #### Test Gaps
 - New code paths without corresponding test coverage

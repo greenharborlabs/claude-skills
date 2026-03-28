@@ -34,6 +34,7 @@ If the argument is `--help` or `help`, print this usage summary and stop:
 
 Usage:
   /review                                    Diff against main (default)
+  /review --branch develop                   Diff against a specific branch
   /review --baseline release/2.1             Diff against a specific ref
   /review --baseline HEAD~5                  Diff against last 5 commits
   /review --scope src/billing/               Review a specific directory
@@ -44,6 +45,7 @@ Usage:
 
 Flags:
   --baseline <ref>       Override diff base (default: origin/main)
+  --branch <name>        Alias for --baseline (e.g. --branch develop)
   --critical-only        Only report CRITICAL findings
   --fix                  Auto-apply fixes for CRITICAL IMPL issues (skips interactive)
   --out <path>           Write report to file (auto-generated for non-diff modes)
@@ -57,7 +59,8 @@ Output:
 
 Examples:
   /review                                    Pre-landing diff review
-  /review --baseline develop                 Diff against develop branch
+  /review --branch develop                   Diff against develop branch
+  /review --baseline develop                 Same as --branch develop
   /review --scope src/order/                 Review the order package
   /review --scope l402-auth/                 Review a Maven/Gradle submodule
   /review --scope l402-auth/,l402-payment/   Review multiple submodules
@@ -79,7 +82,7 @@ Parse the invocation arguments:
   - _(default)_ → DIFF mode
 
 - **Flags**:
-  - `--baseline <ref>` → custom diff base (default: `origin/main`). Only applies to DIFF mode.
+  - `--baseline <ref>` or `--branch <ref>` → custom diff base (default: `origin/main`). Only applies to DIFF mode. `--branch` is an alias for `--baseline`.
   - `--critical-only` → suppress INFORMATIONAL findings in output
   - `--fix` → auto-apply CRITICAL fixes without interactive prompts
   - `--out <path>` → write final report to this file path. In SCOPE, FULL, and FLOW modes, if `--out` is not specified, auto-generate a report file at `reports/review-<mode>-<YYYY-MM-DD>.md` (create the `reports/` directory if needed). In DIFF mode, `--out` is optional — output goes to stdout only unless specified.
