@@ -65,6 +65,7 @@ Usage:
   /orchestrate <plan-file> --coder TYPE             Override coder agent (default: auto-detected)
   /orchestrate <plan-file> --reviewer TYPE          Override reviewer agent (default: auto-detected)
   /orchestrate <plan-file> --architect TYPE         Override architect agent (default: auto-detected)
+  /orchestrate <plan-file> --branch main            Specialist reviews diff against this ref
 
 Scope syntax:
   Heading match   "Wave 1"            Substring match against H2/H3 headings
@@ -78,6 +79,7 @@ Flags:
   --coder         Coder agent type  (default: auto-detected from project files)
   --reviewer      Reviewer agent type  (default: auto-detected from project files)
   --architect     Architect agent type (default: auto-detected from project files)
+  --branch        Base ref for specialist reviews (default: START_COMMIT)
 ```
 
 ---
@@ -95,6 +97,7 @@ Flags:
 6. **`--coder TYPE`** — Default: auto-detected (see Step 1.5).
 7. **`--reviewer TYPE`** — Default: auto-detected (see Step 1.5).
 8. **`--architect TYPE`** — Default: auto-detected (see Step 1.5).
+9. **`--branch REF`** — Base ref for Step 6.5 specialist reviews. When set, specialist reviewers diff against this ref (e.g. `origin/main`) instead of `START_COMMIT`, so they see the full feature branch diff — not just what orchestration added. Default: `START_COMMIT`.
 
 ---
 
@@ -392,6 +395,10 @@ the registry is empty or has no relevant entries.>
 - String concatenation in @Query native queries — use parameterized :name placeholders
 - Missing @Valid on @RequestBody at controller boundaries
 - User-supplied IDs used to fetch records without ownership/authorization check
+- Methods exceeding ~20 lines — decompose into named helpers that describe intent
+- Loops with multiple break/continue — extract to method with early return, or use Streams
+- Nested loops — extract inner loop to a named method
+- Deep if/else nesting (3+ levels) — use guard clauses and early returns
 
 **React** (if any *.tsx/*.ts/*.jsx files):
 - useEffect with subscriptions/fetch calls missing cleanup (AbortController, removeEventListener)
@@ -842,11 +849,14 @@ concurrency hazards across shared state, and API contract violations.
 
 #### 6.5a. Collect review context
 
-Gather the aggregate diff and file list across all batches:
+Gather the aggregate diff and file list across all batches.
+
+Determine the **review baseline**: if `--branch` was provided, use that ref. Otherwise use `START_COMMIT`.
 
 ```bash
-git diff $START_COMMIT          # Full diff: start commit vs working tree (captures uncommitted changes)
-git diff $START_COMMIT --stat   # File summary
+REVIEW_BASE=${BRANCH_REF:-$START_COMMIT}
+git diff $REVIEW_BASE           # Full diff: review base vs working tree (captures uncommitted changes)
+git diff $REVIEW_BASE --stat    # File summary
 ```
 
 If the aggregate diff is too large (>500 lines), focus each specialist on the files
@@ -869,7 +879,7 @@ Review ALL changes from this orchestration run.
 ## Plan context
 <paste plan Summary section — what was built and why>
 
-## Aggregate diff
+## Aggregate diff (against <REVIEW_BASE>)
 <full git diff of all changes>
 
 ## Changed files

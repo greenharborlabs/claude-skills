@@ -64,6 +64,8 @@ Be terse. For each issue: one line describing the problem, one line with the fix
 - Methods/functions exceeding ~20 lines — candidates for extraction
 - Cyclomatic complexity: methods with more than 4-5 branching paths (`if`/`else`/`switch`/`catch`/`&&`/`||`/ternary) — extract helper methods or use early returns
 - Cognitive complexity: deeply nested logic (3+ levels of `if`/`for`/`while` nesting) — flatten with guard clauses or extract inner blocks
+- Multi-break/multi-continue loops: any loop with more than one `break` or `continue` is hard to reason about — extract to a method with early returns, use stream operations, or restructure the loop condition
+- Nested loops: inner loops should be extracted to named methods (the outer loop body should read like prose, not require tracing nested iteration)
 - God methods: single methods doing more than one conceptual thing (e.g., validate + transform + persist) — split into focused methods
 - Long parameter lists (5+ parameters) — consider a parameter object or builder
 

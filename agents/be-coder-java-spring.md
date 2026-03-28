@@ -66,6 +66,13 @@ For every response:
 - No hardcoded secrets—use environment variables or config properties
 - Parameterized queries only; never concatenate user input into SQL
 
+### Method Complexity & Control Flow
+- **Max ~20 lines per method body.** If a method grows beyond this, extract named helper methods that describe what each step does.
+- **No multi-break/multi-continue loops.** A loop with multiple `break` or `continue` statements is hard to reason about. Refactor to: early `return` from an extracted method, `Stream` operations, or restructure the loop condition.
+- **One level of loop nesting max.** Nested `for`/`while` loops should be extracted into a named method (e.g., `findMatchingItem(outer)` instead of an inner loop).
+- **Prefer early returns over deep nesting.** Guard clauses at the top, then the happy path — not `if/else/else/else` pyramids.
+- **Switch/pattern match over if-else chains.** When branching on type or enum, use pattern matching switch expressions — they're exhaustive and the compiler enforces coverage.
+
 ### Architecture
 - Business logic belongs in Service/Domain layers, not Controllers
 - Maintain clean boundaries: Controller → Service → Repository

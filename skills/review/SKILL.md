@@ -55,6 +55,7 @@ Output:
   Findings are classified into two resolution paths:
   - DESIGN items → need /plan-work before implementation
   - IMPL items   → surgical fixes, ready for /orchestrate
+  IMPL findings are also written to an orchestrate-ready mini-plan file.
   Each finding includes a copy-paste command to kick off the next workflow.
 
 Examples:
@@ -493,7 +494,7 @@ Before building the report, group findings into **waves** — sets of tasks that
 
 3. Number waves sequentially across the entire report: Wave 1, Wave 2, etc. DESIGN waves come first, then IMPL waves. Within a wave, order by severity (CRITICAL before INFORMATIONAL).
 
-4. **Consolidate within waves:** Within each wave, merge findings that share a common theme or module into a single actionable workload. Do NOT emit one command per finding — group related IMPL findings into one `/orchestrate` command (using `--scope "I1,I2,I3"`) and related DESIGN findings into one `/plan-work` command. A wave with 5 small IMPL fixes in the same service layer should become 1 orchestrate task, not 5 separate commands. Use your judgment: findings touching different subsystems within the same wave stay as separate commands.
+4. **Consolidate within waves:** Within each wave, merge findings that share a common theme or module into a single actionable workload. Do NOT emit one command per finding — group related IMPL findings into one `/orchestrate` command targeting a single wave in the IMPL mini-plan, and related DESIGN findings into one `/plan-work` command. A wave with 5 small IMPL fixes in the same service layer should become 1 orchestrate task, not 5 separate commands. Use your judgment: findings touching different subsystems within the same wave stay as separate commands.
 
 **Important:** The wave grouping is an optimization hint, not a hard constraint. If a finding's file footprint is ambiguous (e.g., "multiple files" with no specifics), be conservative and put it in its own wave.
 
@@ -569,7 +570,7 @@ These items are surgical, well-defined fixes that can go straight to implementat
 
 Copy-paste commands grouped into **waves** of work that can be run in parallel. Tasks within a wave touch different files and are safe to run concurrently. Complete all tasks in a wave before starting the next.
 
-**Grouping rules:** Within each wave, consolidate related findings into meaningful workloads rather than issuing one command per finding. Group IMPL findings that share a theme or module into a single `/orchestrate` command. Group related DESIGN findings into a single `/plan-work` command. Each command must include the report file path so it can be actioned in a separate session.
+**Grouping rules:** Within each wave, consolidate related findings into meaningful workloads rather than issuing one command per finding. Group IMPL findings that share a theme or module into a single `/orchestrate` command targeting a wave in the IMPL mini-plan. Group related DESIGN findings into a single `/plan-work` command with the report path. Each command must include the relevant file path so it can be actioned in a separate session.
 
 #### Wave 1 — <N> parallel tasks
 ```bash
@@ -577,7 +578,7 @@ Copy-paste commands grouped into **waves** of work that can be run in parallel. 
 /plan-work "<Design description covering D1>" --review {REPORT_PATH}
 
 # I1+I2. <grouped impl theme>  [Files: FileC.java, FileD.java, FileE.java]
-/orchestrate {REPORT_PATH} --scope "I1,I2"
+/orchestrate {IMPL_PLAN_PATH} --scope "Wave 1"
 ```
 
 #### Wave 2 — <N> parallel tasks
@@ -586,7 +587,7 @@ Copy-paste commands grouped into **waves** of work that can be run in parallel. 
 /plan-work "<Design description covering D2>" --review {REPORT_PATH}
 
 # I3. <impl theme>  [Files: FileF.java]
-/orchestrate {REPORT_PATH} --scope "I3"
+/orchestrate {IMPL_PLAN_PATH} --scope "Wave 2"
 ```
 
 #### Wave 3 — solo (unbounded scope)
@@ -595,7 +596,11 @@ Copy-paste commands grouped into **waves** of work that can be run in parallel. 
 /plan-work "<Design description covering D3>" --review {REPORT_PATH}
 ```
 
-Where `{REPORT_PATH}` is the path to this review report (e.g., `reports/review-scope-OrderService-2026-03-15.md`).
+Where:
+- `{REPORT_PATH}` is the path to this review report (e.g., `reports/review-scope-OrderService-2026-03-15.md`)
+- `{IMPL_PLAN_PATH}` is the path to the IMPL mini-plan (e.g., `reports/review-impl-plan-2026-03-15.md`) — see Step 7f
+
+**Branch propagation:** If `--branch` or `--baseline` was set to a non-default value (i.e., not `origin/main`), append `--branch <ref>` to every `/plan-work` and `/orchestrate` command in the playbook. This ensures downstream skills diff against the same baseline used during review. Note: strip the `origin/` prefix when propagating — review diffs against `origin/<ref>` (remote-tracking), but plan-work and orchestrate diff against local refs (e.g., pass `--branch develop`, not `--branch origin/develop`).
 ```
 
 For **SCOPE mode** (single target), prefix findings with the scope label:
@@ -699,6 +704,61 @@ In DIFF mode, only write to file if `--out` was explicitly specified.
 
 Output to stdout regardless of mode.
 
+### 7f. Write IMPL mini-plan (if IMPL findings exist)
+
+**Skip this step if there are no IMPL findings.**
+
+When IMPL findings exist, generate an orchestrate-ready plan file that restructures the IMPL findings from the report into the `## Wave N:` / `### W{N}-{NN}:` format that orchestrate parses via Rule A. This separates concerns: the review report stays human-optimized (bullet format, scannable), while the mini-plan is machine-optimized for orchestrate.
+
+**Output path:** `reports/review-impl-plan-<YYYY-MM-DD>.md` (or `reports/review-impl-plan-<scope-label>-<YYYY-MM-DD>.md` in SCOPE mode). Create the `reports/` directory if needed.
+
+**Mini-plan structure:**
+
+```markdown
+# IMPL Fixes from Review
+
+**Source:** `{REPORT_PATH}`
+**Generated:** <date>
+
+## Summary
+Surgical fixes identified by /review. Each work unit is a self-contained fix
+that can be implemented without architectural decisions.
+
+## Wave 1: <wave theme from Action Playbook grouping>
+
+### W1-01: <I{N} finding title — imperative form>
+<problem description from the finding>
+
+**Files:** <files from the finding's Files: field>
+**Acceptance criteria:**
+- <derived from the Fix: field — restate as a checkable condition>
+- Existing tests continue to pass
+**Error handling:** N/A (surgical fix)
+**Tests:** Verify fix via existing test suite; add regression test if no coverage exists
+
+### W1-02: <next finding in same wave>
+...
+
+## Wave 2: <next wave theme>
+
+### W2-01: ...
+```
+
+**Mapping rules:**
+- Each **wave** in the Action Playbook that contains `/orchestrate` commands becomes a `## Wave N:` in the mini-plan
+- Each **IMPL finding** (I1, I2, etc.) within that wave becomes a `### W{N}-{NN}:` work unit
+- Grouped findings (e.g., "I1+I2") become separate work units in the same wave (they're independent — that's why they were grouped)
+- The finding's `Fix:` field becomes the acceptance criterion (restated as a checkable condition)
+- The finding's `Files:` field becomes the `**Files:**` list
+- Wave numbering in the mini-plan is sequential starting at 1 (independent of the report's wave numbering, which mixes DESIGN and IMPL)
+
+**Branch propagation:** If `--branch` or `--baseline` was set to a non-default value, include it in the mini-plan header as metadata so the user can pass it when invoking orchestrate:
+```markdown
+**Branch:** `<ref>` (pass `--branch <ref>` to `/orchestrate`)
+```
+
+After writing, print: `IMPL plan written to: <path> (<N> work units across <M> waves)`
+
 ---
 
 ## Step 8: Handle critical issues (DIFF mode only)
@@ -720,7 +780,7 @@ If `--fix` is NOT set:
   - Options: **A: Acknowledge — I'll run `/plan-work` next**, **B: Acknowledge**, **C: False positive — skip**
 - After all critical questions are answered, output a summary of choices.
 - If the user chose A on any IMPL issue, apply the recommended fixes.
-- If the user chose A on any DESIGN issue, output the ready-to-run `/plan-work` command (including `--review {REPORT_PATH}` if a report was written) so the user can invoke it in their next prompt. Do NOT attempt to invoke `/plan-work` directly — the review skill should remain read-only.
+- If the user chose A on any DESIGN issue, output the ready-to-run `/plan-work` command (including `--review {REPORT_PATH}` if a report was written, and `--branch <ref>` if a non-default baseline was used) so the user can invoke it in their next prompt. Do NOT attempt to invoke `/plan-work` directly — the review skill should remain read-only.
 
 ---
 

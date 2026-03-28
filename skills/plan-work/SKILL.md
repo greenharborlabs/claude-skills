@@ -34,6 +34,7 @@ Usage:
   /plan-work "feature description" --spec              Rich spec output (more detail)
   /plan-work "feature description" --out plans/foo.md  Custom output path
   /plan-work "fix review findings" --review reports/review-scope-OrderService-2026-03-15.md
+  /plan-work "add caching" --branch develop            Diff and orchestrate against develop
 
 Modes:
   auto (default)  Greenfield → ceo, fix/refactor/small → eng
@@ -44,6 +45,7 @@ Flags:
   --spec          Rich output: full data flow diagrams, error tables, test specs
   --out PATH      Output file path (default: plans/<slugified-description>.md)
   --review PATH   Seed plan with findings from a /review report
+  --branch REF    Base ref for git diff and orchestrate commands (default: main)
   --interview     Force requirements discovery interview (Phase 0)
   --no-interview  Skip requirements discovery interview
 ```
@@ -55,8 +57,9 @@ Flags:
 3. **`--spec`** — Produce rich specification output instead of lean orchestrate format.
 4. **`--out PATH`** — Output file path. Default: `plans/<slugified-description>.md`.
 5. **`--review PATH`** — Path to a `/review` report to seed exploration with known findings.
-6. **`--interview`** — Force requirements discovery interview even if description is detailed.
-7. **`--no-interview`** — Skip requirements discovery interview even if description is brief.
+6. **`--branch REF`** — Base ref for `git diff` in Phase 2a and for `--branch` on `/orchestrate` commands in the playbook. Default: `main`.
+7. **`--interview`** — Force requirements discovery interview even if description is detailed.
+8. **`--no-interview`** — Skip requirements discovery interview even if description is brief.
 
 ---
 
@@ -226,7 +229,7 @@ Read-only. No user interaction. Strict budget to protect context.
 ### 2a. System Context
 ```bash
 git log --oneline -20          # Recent history
-git diff main --stat           # What's already changed
+git diff <BRANCH_REF> --stat   # What's already changed (BRANCH_REF = --branch value or "main")
 git rev-parse --short HEAD     # Current commit hash (record for plan staleness detection)
 ```
 Read CLAUDE.md, TODOS.md, and any existing architecture/plan docs.
@@ -687,6 +690,8 @@ End with the single full-plan command as a convenience alternative.
 Use the actual plan path and wave titles. If agent overrides are needed (e.g. for a
 frontend project), include `--coder` / `--reviewer` / `--architect` flags on each line.
 
+**Branch propagation:** If `--branch` was set to a non-default value (i.e., not `main`), append `--branch <ref>` to every `/orchestrate` command in the playbook so specialist reviews diff against the same baseline.
+
 ### 5c. Completion Summary
 Print:
 ```
@@ -700,7 +705,7 @@ Confidence: Architecture=HIGH, Errors=HIGH, Tests=MEDIUM, Data=HIGH, Security=HI
 Gate: Passed round N (N unresolved items)
 
 Orchestration playbook included — run wave-by-wave or all at once:
-  /orchestrate <path>
+  /orchestrate <path> <--branch ref if non-default>
 ```
 
 ---
