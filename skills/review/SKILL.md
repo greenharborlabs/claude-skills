@@ -493,6 +493,8 @@ Before building the report, group findings into **waves** — sets of tasks that
 
 3. Number waves sequentially across the entire report: Wave 1, Wave 2, etc. DESIGN waves come first, then IMPL waves. Within a wave, order by severity (CRITICAL before INFORMATIONAL).
 
+4. **Consolidate within waves:** Within each wave, merge findings that share a common theme or module into a single actionable workload. Do NOT emit one command per finding — group related IMPL findings into one `/orchestrate` command (using `--scope "I1,I2,I3"`) and related DESIGN findings into one `/plan-work` command. A wave with 5 small IMPL fixes in the same service layer should become 1 orchestrate task, not 5 separate commands. Use your judgment: findings touching different subsystems within the same wave stay as separate commands.
+
 **Important:** The wave grouping is an optimization hint, not a hard constraint. If a finding's file footprint is ambiguous (e.g., "multiple files" with no specifics), be conservative and put it in its own wave.
 
 ### 7d. Build the report
@@ -520,19 +522,16 @@ These items need architectural thinking, trade-off analysis, or multi-file desig
 - **D1.** [file:line] Problem description
   Why design needed: <one line explaining why this can't be fixed surgically>
   Files: <list of files this fix touches>
-  Suggested: `/plan-work --spec "Design <brief description>"`
 
 - **D2.** [file:line] Problem description
   Why design needed: <one line>
   Files: <list of files>
-  Suggested: `/plan-work --spec "Design <brief description>"`
 
 ### INFORMATIONAL
 
 - **D3.** [file:line] Problem description
   Why design needed: <one line>
   Files: <list of files>
-  Suggested: `/plan-work --spec "Design <brief description>"`
 
 ---
 
@@ -545,19 +544,16 @@ These items are surgical, well-defined fixes that can go straight to implementat
 - **I1.** [file:line] Problem description
   Fix: <specific fix description>
   Files: <list of files this fix touches>
-  Suggested: `/orchestrate "<brief task description>"`
 
 - **I2.** [file:line] Problem description
   Fix: <specific fix description>
   Files: <list of files>
-  Suggested: `/orchestrate "<brief task description>"`
 
 ### INFORMATIONAL
 
 - **I3.** [file:line] Problem description
   Fix: <specific fix description>
   Files: <list of files>
-  Suggested: `/orchestrate "<brief task description>"`
 
 ---
 
@@ -571,34 +567,35 @@ These items are surgical, well-defined fixes that can go straight to implementat
 
 ### Action Playbook
 
-Every finding as a copy-paste command, grouped into **waves** of tasks that can be run in parallel. Tasks within a wave touch different files and are safe to run concurrently. Complete all tasks in a wave before starting the next wave.
+Copy-paste commands grouped into **waves** of work that can be run in parallel. Tasks within a wave touch different files and are safe to run concurrently. Complete all tasks in a wave before starting the next.
+
+**Grouping rules:** Within each wave, consolidate related findings into meaningful workloads rather than issuing one command per finding. Group IMPL findings that share a theme or module into a single `/orchestrate` command. Group related DESIGN findings into a single `/plan-work` command. Each command must include the report file path so it can be actioned in a separate session.
 
 #### Wave 1 — <N> parallel tasks
 ```bash
-# D1. <brief problem description>  [Files: FileA.java]
-/plan-work --spec "<Design description>"
+# D1. <grouped design theme>  [Files: FileA.java]
+/plan-work "<Design description covering D1>" --review {REPORT_PATH}
 
-# I1. <brief problem description>  [Files: FileC.java]
-/orchestrate "<task description>"
-
-# I2. <brief problem description>  [Files: FileD.java, FileE.java]
-/orchestrate "<task description>"
+# I1+I2. <grouped impl theme>  [Files: FileC.java, FileD.java, FileE.java]
+/orchestrate {REPORT_PATH} --scope "I1,I2"
 ```
 
 #### Wave 2 — <N> parallel tasks
 ```bash
-# D2. <brief problem description>  [Files: FileA.java, FileB.java]
-/plan-work --spec "<Design description>"
+# D2. <design theme>  [Files: FileA.java, FileB.java]
+/plan-work "<Design description covering D2>" --review {REPORT_PATH}
 
-# I3. <brief problem description>  [Files: FileF.java]
-/orchestrate "<task description>"
+# I3. <impl theme>  [Files: FileF.java]
+/orchestrate {REPORT_PATH} --scope "I3"
 ```
 
 #### Wave 3 — solo (unbounded scope)
 ```bash
-# D3. <brief problem description>  [Files: cross-cutting]
-/plan-work --spec "<Design description>"
+# D3. <cross-cutting design theme>  [Files: cross-cutting]
+/plan-work "<Design description covering D3>" --review {REPORT_PATH}
 ```
+
+Where `{REPORT_PATH}` is the path to this review report (e.g., `reports/review-scope-OrderService-2026-03-15.md`).
 ```
 
 For **SCOPE mode** (single target), prefix findings with the scope label:
@@ -614,7 +611,6 @@ Scope Review [l402-auth]: 5 issues (2 critical, 3 informational)
 
 - **D1.** [l402-auth/src/.../MacaroonService.java:89] ...
   Why design needed: ...
-  Suggested: `/plan-work --spec "Design ..."`
 
 ---
 
@@ -624,7 +620,6 @@ Scope Review [l402-auth]: 5 issues (2 critical, 3 informational)
 
 - **I1.** [l402-auth/src/.../MacaroonCrypto.java:45] ...
   Fix: ...
-  Suggested: `/orchestrate "..."`
 ```
 
 For **SCOPE mode** (multiple targets), group findings by scope label within each resolution path:
@@ -725,7 +720,7 @@ If `--fix` is NOT set:
   - Options: **A: Acknowledge — I'll run `/plan-work` next**, **B: Acknowledge**, **C: False positive — skip**
 - After all critical questions are answered, output a summary of choices.
 - If the user chose A on any IMPL issue, apply the recommended fixes.
-- If the user chose A on any DESIGN issue, output the ready-to-run `/plan-work` command so the user can invoke it in their next prompt. Do NOT attempt to invoke `/plan-work` directly — the review skill should remain read-only.
+- If the user chose A on any DESIGN issue, output the ready-to-run `/plan-work` command (including `--review {REPORT_PATH}` if a report was written) so the user can invoke it in their next prompt. Do NOT attempt to invoke `/plan-work` directly — the review skill should remain read-only.
 
 ---
 
