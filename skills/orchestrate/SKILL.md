@@ -301,6 +301,37 @@ not begin tier N+1 exploration until all of tier N is complete.
 
 This within-tier overlap can reduce wall-clock time for tiers with 2+ work groups.
 
+**Wave checklist — mandatory tracking:**
+Before starting each batch, print a checklist of every task in the wave:
+
+```
+Wave N checklist:
+- [ ] Task-ID-1: <subject>
+- [ ] Task-ID-2: <subject>
+- [ ] Task-ID-3: <subject>
+```
+
+As each task completes (passes review + tests), immediately print the updated
+checklist with that task checked off:
+
+```
+Wave N checklist:
+- [x] Task-ID-1: <subject> ✓ DONE
+- [ ] Task-ID-2: <subject>
+- [x] Task-ID-3: <subject> ✓ DONE
+```
+
+**Before advancing to the next wave**, you MUST verify every task in the current
+wave is checked off. Call `TaskList` and confirm every task in this wave has
+status `completed`. If any task is not completed (still `pending`, `in_progress`,
+or `blocked`), you MUST NOT proceed. Instead:
+1. Print the incomplete checklist showing which tasks are unchecked.
+2. Attempt to execute the missing task(s).
+3. Only after ALL tasks show `completed` in `TaskList` AND the printed checklist
+   is fully checked off, proceed to the next wave.
+
+This is a **hard gate** — no exceptions, no skipping.
+
 For each batch, execute the **Code → Review → Fix** cycle:
 
 ---
@@ -677,8 +708,10 @@ Do **not** run the full test suite here.
 
 #### 4f. Mark complete
 
-Mark all tasks in the batch as `completed` via `TaskUpdate`. Log a one-line
-summary of what was done and any persisted WARNING/INFO issues.
+Mark each task in the batch as `completed` via `TaskUpdate` **one at a time,
+immediately after it passes review + tests**. Print the updated wave checklist
+after each mark-off. Log a one-line summary of what was done and any persisted
+WARNING/INFO issues.
 
 **Update the contract registry:** For each coder completion report that includes
 `NEW_INTERFACES`, add an entry to the contract registry:
@@ -699,6 +732,19 @@ force a re-read than to propagate a stale signature.
 Batch 2/4 complete: 5/10 tasks done, 0 blocked. [elapsed: ~3m]
 ```
 This keeps the user informed during long orchestration runs.
+
+**Wave completion gate:** Before proceeding, call `TaskList` and verify every
+task in this wave/batch has status `completed`. Print the final wave checklist:
+
+```
+Wave N — COMPLETE ✓
+- [x] Task-ID-1: <subject>
+- [x] Task-ID-2: <subject>
+- [x] Task-ID-3: <subject>
+All N/N tasks verified complete.
+```
+
+If ANY task is not `completed`, do NOT proceed. Execute the missing task(s) first.
 
 **Rollback note:** If a batch is blocked (tasks could not be completed after
 exhausting fix cycles), print a rollback hint:
