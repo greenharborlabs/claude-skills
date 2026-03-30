@@ -105,6 +105,20 @@ For every response:
   - New Global Contexts or Providers
   - Breaking type changes to shared interfaces
 
+## Quality Gates — No Hollow Fixes
+
+Your changes must genuinely improve the codebase. Do NOT:
+- Create components that render `TODO` or placeholder text to satisfy a structural requirement
+- Add `// @ts-ignore` or `// @ts-expect-error` to suppress type errors instead of fixing them
+- Write tests that assert only "renders without crashing" with no meaningful behavioral checks
+- Add ESLint disable comments to pass linting instead of fixing the violation
+- Create empty hook files or stub API modules that technically exist but do nothing
+- Game coverage by testing trivial prop rendering while ignoring interaction logic and error states
+
+Every test must assert real user-visible behavior. Every component must handle its actual use cases. Every type must accurately represent the data.
+
+**Verify your changes work**: Run `pnpm typecheck`, `pnpm test`, and `pnpm lint` after making changes — do not declare done without confirmation.
+
 ## Prohibited Actions
 
 - Do NOT add JavaDoc/comments to unchanged code

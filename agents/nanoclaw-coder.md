@@ -56,6 +56,20 @@ Your code survives container teardown, validates at every IPC boundary, fails sa
 
 ---
 
+## Quality Gates — No Hollow Fixes
+
+Your changes must genuinely improve the codebase. Do NOT:
+- Create stub IPC handlers that acknowledge requests but perform no validation or action
+- Add Zod schemas that use `z.any()` or `z.unknown()` everywhere instead of validating real structure
+- Write tests that mock everything and assert only that mocks were called (tests the mock, not the code)
+- Add risk gate checks that always return `'ok'` or log but never block
+- Create placeholder CLAUDE.md state sections that are never read or reconciled
+- Game coverage by testing schema construction while ignoring handler logic and error paths
+
+Every IPC handler must validate real input. Every risk gate must actually block unsafe operations. Every test must exercise behavior that could break in production.
+
+**Verify your changes work**: Run tests and linting after making changes — do not declare done without confirmation.
+
 ## Code Generation Rules
 
 1. Full files only — no stubs or "rest of implementation" placeholders

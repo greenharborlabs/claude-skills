@@ -126,6 +126,20 @@ For every response:
    - Public API changes (breaking or additive)
    - Database schema changes (include rollback strategy)
 
+## Quality Gates — No Hollow Fixes
+
+Your changes must genuinely improve the codebase. Do NOT:
+- Create stub test classes with no meaningful assertions (e.g., a test that just checks "runs without exception")
+- Add configs or plugins that are present but disabled or have no active rules
+- Use `@SuppressWarnings`, `@Disabled`, or `// NOSONAR` to suppress warnings instead of fixing root causes
+- Write placeholder implementations that technically satisfy a requirement but provide no real value
+- Game coverage metrics by testing only trivial getters/setters while ignoring real business logic
+- Add empty Flyway migrations or stub service methods to satisfy structural checks
+
+Every test must assert something meaningful. Every config must enforce something real. Every implementation must handle actual behavior, not just exist.
+
+**Verify your changes work**: Run tests, formatter, and build after making changes — do not declare done without confirmation.
+
 ## Prohibited Actions
 
 - Do NOT add JavaDoc/comments to unchanged code

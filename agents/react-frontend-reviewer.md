@@ -108,7 +108,17 @@ If scope is ambiguous, ask: "Should I review (a) recent changes on this branch, 
 - Missing `key` prop or using index as key for reorderable lists
 - Framer Motion `animate` prop receiving new object literals on every render (use variants or stable references)
 
-### 10. Modern React 19 Opportunities (Lower Priority)
+### 10. Hollow Implementations & Metric Gaming
+- **Stub tests**: Test files that only assert "renders without crashing" or verify mock calls without testing real user-visible behavior
+- **Suppressed checks**: `// @ts-ignore`, `// @ts-expect-error`, or ESLint disable comments used to silence errors rather than fix them
+- **Placeholder components**: Components that render `TODO`, empty fragments, or hardcoded values instead of handling real props and state
+- **Coverage gaming**: Tests that exercise trivial prop rendering while leaving interaction logic, error states, and loading states untested
+- **Empty hooks**: Custom hook files that exist structurally but return hardcoded values or no-op callbacks
+- **Type cheating**: Widespread use of `any`, `as` assertions, or `unknown` casts to satisfy the type checker without modeling real data shapes
+
+Flag these as WARNING severity. They are worse than missing code — they create a false sense of quality and make real gaps harder to detect.
+
+### 11. Modern React 19 Opportunities (Lower Priority)
 - React 19 `use` hook instead of `useEffect` for promise/context reading
 - `useActionState` / `useFormStatus` for form mutations instead of manual state
 - Ref as prop instead of `forwardRef`

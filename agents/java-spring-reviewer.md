@@ -106,7 +106,17 @@ For every file in review scope, you MUST scan imports and method calls. Do not s
 - Missing or incorrect exception handling (`@ControllerAdvice`)
 - Spring profile misuse: dev-only config leaking into production profiles
 
-### 9. Modern Java 25 Opportunities (Lower Priority)
+### 9. Hollow Implementations & Metric Gaming
+- **Stub tests**: Test classes that assert nothing meaningful — only check "runs without exception" or verify mock interactions without testing real behavior
+- **Disabled checks**: `@SuppressWarnings`, `@Disabled`, `// NOSONAR` used to silence warnings rather than fix root causes
+- **Placeholder configs**: Build plugins, formatters, or analysis tools that are present but configured to do nothing (all rules disabled, thresholds set to pass everything)
+- **Coverage gaming**: Tests that exercise only trivial getters/setters or constructors while leaving real business logic, error paths, and edge cases untested
+- **Empty migrations**: Flyway/Liquibase files that exist structurally but contain no meaningful schema changes
+- **Stub implementations**: Service methods, controllers, or handlers that technically exist but return hardcoded values, skip validation, or defer all real logic to `// TODO`
+
+Flag these as WARNING severity. They are worse than missing code — they create a false sense of coverage and make real gaps harder to detect.
+
+### 10. Modern Java 25 Opportunities (Lower Priority)
 - Records for DTOs and value objects (NOT for JPA entities)
 - Sealed interfaces for closed type hierarchies (exception types, domain events, strategy patterns)
 - Pattern matching in `instanceof` checks and `switch` expressions

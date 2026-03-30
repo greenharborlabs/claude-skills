@@ -635,7 +635,79 @@ Remaining CRITICAL items → add to `## Open Questions` with the architect's evi
 After resolving CRITICAL findings (user input) and incorporating IMPORTANT/MINOR (auto):
 - Re-draft only the affected sections — no full re-draft
 - Re-score only the dimensions that were LOW or MEDIUM
-- **No new file reads or architect spawns** — work with existing context + user answers
+
+### Step 4½: Conditional Architect Re-Review
+
+After re-drafting, check whether the incorporated fixes caused **structural changes**:
+
+```
+STRUCTURAL CHANGE = any of:
+  - New wave added or wave reordered
+  - ≥ 2 new work units added
+  - Work unit moved between waves (dependency change)
+  - New file/interface added to Blast Radius table
+
+NOT structural (skip re-review):
+  - Acceptance criteria tightened or added
+  - Error handling added to existing work unit
+  - Test spec expanded
+  - Minor wording or description changes
+```
+
+**If structural:** Spawn the same architect agent type from Phase 1c with a **delta-scoped
+re-review prompt**. This is lighter than the original review — the architect only checks
+the changed portions, not the full plan.
+
+**Delta re-review prompt template:**
+
+```
+You are re-reviewing an implementation plan after critical findings were incorporated.
+You reviewed the original draft and found issues — those have been addressed. Your job
+now is to verify the fixes are sound and haven't introduced new problems.
+
+## Plan Under Review
+Read the plan file at: <output-path>
+
+## What Changed Since Your Last Review
+<list each structural change: new waves, new work units, reordered dependencies>
+
+## Reduced Scope
+Focus ONLY on:
+1. **New/moved work units** — are they correctly placed in wave order? Do they have
+   complete acceptance criteria, error handling, and test specs?
+2. **Wave dependency validity** — did the structural changes break any dependency
+   assumptions? Are units within the same wave still independent?
+3. **Blast radius update** — are new files/interfaces reflected in the Blast Radius
+   table with their consumers?
+
+Do NOT re-review unchanged work units or re-assess dimensions that scored HIGH.
+
+## Budget
+- **Max 4 file reads** (verify new file references exist)
+- **Max 3 Glob/Grep searches**
+
+## Return Format
+DELTA REVIEW
+============
+Verdict: [SOUND|NEEDS_WORK]
+
+[If NEEDS_WORK:]
+D1: [CRITICAL|IMPORTANT] — [issue with the fix]
+    Where: [which new/moved work unit]
+    Fix: [concrete recommendation]
+D2: ...
+
+UPDATED SCORES (only for dimensions affected by structural changes):
+[Dimension]: [HIGH|MEDIUM|LOW] — [one-line reason]
+```
+
+**If the delta review returns NEEDS_WORK with CRITICAL findings:** Apply fixes and
+re-score, but do NOT spawn another re-review (max one re-review to prevent infinite
+loops). Add any unresolved items to `## Open Questions`.
+
+**If the delta review returns SOUND:** Use updated scores (if any) for the gate decision.
+
+**If not structural:** Skip re-review. Self-score with existing context as before.
 
 ### Step 5: Gate Decision
 
@@ -850,6 +922,9 @@ plan template above. These are integrated at their natural positions:
 2. **Independent review is non-negotiable.** Phase 4 MUST spawn an architect sub-agent.
    Do not skip this step, even for small plans. Do not substitute self-review for the
    architect review. The entire point is that a fresh perspective catches what you miss.
+   When critical/important findings cause structural changes (new waves, new work units,
+   reordered dependencies), Phase 4½ re-spawns the architect for a delta review — same
+   principle: don't self-score structural fixes.
 3. **Orchestrate compatibility.** Wave headings MUST be `## Wave N: [Title]`. Work units MUST
    be `### W{N}-{NN}: [Title]`. This is non-negotiable — orchestrate parses this structure.
 4. **One issue = one AskUserQuestion.** Never batch. Lead with recommendation + WHY.
@@ -891,6 +966,12 @@ plan template above. These are integrated at their natural positions:
     checklist (items 1-3, 2 scores). Merge findings conservatively — use the lower score
     when both architects assess the same dimension. The secondary review is scoped to its
     stack's files only and does not duplicate the primary review.
+17. **Structural fixes get delta re-review.** When incorporating critical/important findings
+    causes structural changes (new waves, ≥2 new work units, reordered dependencies), spawn
+    a delta re-review (Step 4½). Max one re-review per plan — if the delta review itself
+    finds critical issues, apply fixes and move to the gate without another spawn. The delta
+    re-review has a reduced budget (4 file reads, 3 searches) and only checks the changed
+    portions. Non-structural fixes (tightened criteria, expanded test specs) are self-scored.
 
 ## Mode Quick Reference
 

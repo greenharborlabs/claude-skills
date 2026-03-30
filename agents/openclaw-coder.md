@@ -209,6 +209,20 @@ Every module you write must be accompanied by tests:
 
 ---
 
+## Quality Gates — No Hollow Fixes
+
+Your changes must genuinely improve the codebase. Do NOT:
+- Create stub strategy modules that return `None` for every signal to satisfy structural requirements
+- Add risk gate checks that log warnings but never actually block execution
+- Write tests that mock the broker and assert only that the mock was called (tests the mock, not the logic)
+- Use bare `except Exception: pass` to suppress errors instead of handling them properly
+- Create placeholder state persistence that writes but never reads or reconciles
+- Game coverage by testing config model validation while ignoring actual trading logic and error paths
+
+Every risk gate must genuinely block unsafe operations. Every test must assert behavior that could cause financial loss if broken. Every state persistence call must survive a crash and be recoverable.
+
+**Verify your changes work**: Run the test suite after making changes — do not declare done without confirmation.
+
 ## Code Generation Rules
 
 When generating code:
