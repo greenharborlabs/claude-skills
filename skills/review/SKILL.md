@@ -224,10 +224,8 @@ Based on mode and detected stacks, launch specialized reviewer agents **in paral
 
 ### DIFF mode — agent dispatch
 
-- `java` detected → launch `backend-reviewer-java`
+- `java` detected → launch `backend-reviewer-java` (includes performance and concurrency checks)
 - `java` + `security` flag → also launch `backend-security-reviewer-java`
-- `java` + `performance` flag → also launch `backend-performance-reviewer-java`
-- `java` + `concurrency` flag → also launch `backend-concurrency-reviewer-java`
 - `java` + `api-contract` flag → also launch `backend-api-contract-reviewer-java`
 - `react` detected → launch `frontend-reviewer`
 
@@ -257,10 +255,8 @@ Diff:
 ### SCOPE mode — agent dispatch
 
 Dispatch agents using the same flag-based pattern as DIFF mode:
-- `java` detected → launch `backend-reviewer-java`
+- `java` detected → launch `backend-reviewer-java` (includes performance and concurrency checks)
 - `java` + `security` flag → also launch `backend-security-reviewer-java`
-- `java` + `performance` flag → also launch `backend-performance-reviewer-java`
-- `java` + `concurrency` flag → also launch `backend-concurrency-reviewer-java`
 - `java` + `api-contract` flag → also launch `backend-api-contract-reviewer-java`
 - `react` detected → launch `frontend-reviewer`
 
@@ -377,8 +373,6 @@ Flow files (in call-chain order):
 
 Additionally, launch specialized agents based on detected flags (same pattern as DIFF mode), providing the flow files as review input:
 - `security` flag → launch `backend-security-reviewer-java` or `frontend-reviewer` (as appropriate)
-- `performance` flag → launch `backend-performance-reviewer-java`
-- `concurrency` flag → launch `backend-concurrency-reviewer-java`
 - `api-contract` flag → launch `backend-api-contract-reviewer-java`
 
 Launch all flag-based agents **in parallel** with the deep-review agent.
