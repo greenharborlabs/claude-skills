@@ -347,8 +347,10 @@ For each batch, execute the **Code → Review → Fix** cycle:
 
 #### 4a. Batch exploration + group sizing
 
-**Explore now, for this batch only.** Before constructing any prompts, do a
-focused read of the files this batch touches. Hard limits scale with batch size:
+**Explore now, for this batch only.** Before constructing any prompts, **re-read
+the relevant wave section from the plan file** (1 Read call — mandatory for waves
+2+, per context hygiene rule in 4f). Then do a focused read of the files this
+batch touches. Hard limits scale with batch size:
 
 - **Max 2 file reads per task + 2 baseline** (e.g. 3-task batch = 8 reads max).
   Prefer reading only the specific line ranges referenced in the plan, not whole files.
@@ -583,8 +585,24 @@ cross-batch contracts — design flaws here propagate downstream.>
 ## Success criteria (from spec)
 <same criteria given to the coder>
 
-## What to check
-- Correctness: does the implementation satisfy all success criteria?
+## Acceptance Criteria Verification (MANDATORY)
+For EACH acceptance criterion listed in the spec excerpt above, you MUST produce
+a line-by-line verdict. This is the most important part of your review — do NOT
+skip or batch criteria together.
+
+Format:
+CRITERIA_CHECKLIST:
+  [PASS] "criterion text" — evidence: <file>:<line> shows <what satisfies it>
+  [FAIL] "criterion text" — not implemented: <what's missing>
+  [PARTIAL] "criterion text" — partially done: <what exists> / <what's missing>
+
+Rules:
+- Copy each criterion VERBATIM from the spec excerpt — do not paraphrase
+- Every FAIL or PARTIAL automatically becomes a CRITICAL issue
+- "Evidence" must point to a specific line in the diff, not a general statement
+- If the diff is too large to verify a criterion, say so — do not guess PASS
+
+## What to check (after criteria verification)
 - Conformance: are all interfaces/contracts respected?
 - Scope: are there any changes outside the intended files?
 - Test coverage: are the affected test files updated/created as needed?
@@ -601,7 +619,12 @@ WARNING   — Suboptimal but not blocking (missing edge case, style issue, etc.)
 INFO      — Suggestion for improvement; non-blocking
 
 ## Output format
+CRITERIA_CHECKLIST:
+  [PASS] "criterion text" — evidence: <file>:<line>
+  [FAIL] "criterion text" — not implemented: <what's missing>
+  [PARTIAL] "criterion text" — <what exists> / <what's missing>
 VERDICT: PASS | FAIL
+  PASS requires ALL criteria [PASS]. Any [FAIL] or [PARTIAL] forces FAIL.
 ISSUES:
   [CRITICAL] <file>:<line> — <description>
   [WARNING]  <file>:<line> — <description>
@@ -613,9 +636,46 @@ SUMMARY: <1–3 sentence plain-English summary>
 
 ---
 
+#### 4c½. Acceptance Criteria Cross-Check (orchestrator-level)
+
+After the reviewer returns, the orchestrator performs its own verification of the
+`CRITERIA_CHECKLIST` before accepting a PASS verdict. This is a trust-but-verify
+step — the reviewer may hallucinate PASS on a criterion it didn't actually check.
+
+**For each work group in the batch:**
+
+1. Read the reviewer's `CRITERIA_CHECKLIST` output.
+2. Count the criteria in the checklist against the acceptance criteria in the
+   original spec excerpt. If any criteria from the spec are **missing** from the
+   checklist (reviewer skipped them), treat them as FAIL.
+3. For each [PASS] verdict, spot-check the evidence: does the `<file>:<line>`
+   reference actually exist in the diff? You already have the diff from 4c — this
+   is a string match, not a file read. If the file:line doesn't appear in the diff,
+   downgrade to [FAIL].
+4. If all criteria are [PASS] with valid evidence → accept the PASS verdict.
+5. If any criteria are [FAIL], [PARTIAL], or missing → override to FAIL regardless
+   of the reviewer's VERDICT line, and enter the fix loop (4d) with the failed
+   criteria listed as CRITICAL issues.
+
+**Budget:** Zero additional tool calls. This step uses only data already in context
+(the spec excerpt, the diff, and the reviewer output). It adds no latency.
+
+**Log format:** Print after each cross-check:
+```
+Criteria cross-check (W1-02): 4/4 PASS — verified ✓
+```
+or:
+```
+Criteria cross-check (W1-02): 3/5 PASS, 1 FAIL, 1 MISSING — overriding to FAIL
+  FAIL: "OrderService returns 400 when amount < 0" — no evidence in diff
+  MISSING: "Audit log entry created on successful order" — reviewer did not check
+```
+
+---
+
 #### 4d. Fix loop
 
-Parse the reviewer's output:
+Parse the reviewer's output (as potentially overridden by 4c½):
 
 **If VERDICT: PASS** → proceed to 4e (targeted tests).
 
@@ -666,6 +726,11 @@ what "correct" looks like, not just what's broken>
 
 ## Issues to fix
 <CRITICAL and WARNING items from reviewer output verbatim>
+
+## Failed acceptance criteria (from cross-check)
+<Any criteria marked [FAIL], [PARTIAL], or MISSING by the orchestrator's 4c½
+cross-check. These are non-negotiable — the fix MUST address every one.
+Omit this section if all criteria passed.>
 
 ## Files to modify
 <FILES_CHANGED from the original coder + any files referenced in issues>
@@ -754,6 +819,34 @@ All N/N tasks verified complete.
 ```
 
 If ANY task is not `completed`, do NOT proceed. Execute the missing task(s) first.
+
+**Context hygiene — mandatory after each wave completes:**
+
+Your context window degrades as it fills. By wave 3-4, compressed earlier context
+causes you to lose focus on instructions, skip cross-checks, and accept sloppy
+reviewer output. Fight this actively:
+
+After printing the wave completion checklist, explicitly discard all wave-local
+data from your working memory. The only things that carry forward are:
+
+| Keep across waves | Discard after wave completes |
+|---|---|
+| Contract registry entries | Raw diffs from coder runs |
+| Task IDs + completion status | Reviewer output (CRITERIA_CHECKLIST, ISSUES) |
+| Blocked task list + reasons | Coder completion reports (FILES_CHANGED, etc.) |
+| START_COMMIT hash | Spec excerpts (re-read from plan file next wave) |
+| Resolved agent suite + TEST_CMD | File contents read during 4a exploration |
+
+**How to discard:** You cannot literally free memory, but you can stop referencing
+it. The key rule: **re-read the plan file at the start of each new wave** (Step 4a).
+Do NOT rely on your memory of what the plan says — re-read the relevant `## Wave N`
+section fresh. This costs one Read call but ensures you're working from the source
+of truth, not a compressed echo of it.
+
+Print after discarding:
+```
+Context hygiene: wave N data discarded. Re-reading plan for wave N+1.
+```
 
 **Rollback note:** If a batch is blocked (tasks could not be completed after
 exhausting fix cycles), print a rollback hint:
