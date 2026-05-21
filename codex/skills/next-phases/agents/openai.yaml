@@ -1,0 +1,7 @@
+interface:
+  display_name: "Next Phases"
+  short_description: "Audit a repo and produce a roadmap"
+  default_prompt: "Use $next-phases to audit this repository"
+
+policy:
+  allow_implicit_invocation: true

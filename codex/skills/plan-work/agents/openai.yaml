@@ -1,0 +1,7 @@
+interface:
+  display_name: "Plan Work"
+  short_description: "Create battle-tested implementation plans"
+  default_prompt: "Use $plan-work to create an implementation plan for this feature"
+
+policy:
+  allow_implicit_invocation: true

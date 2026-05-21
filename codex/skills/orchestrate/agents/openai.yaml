@@ -1,0 +1,7 @@
+interface:
+  display_name: "Orchestrate"
+  short_description: "Execute plan files with code-review-fix cycles"
+  default_prompt: "Use $orchestrate to execute this plan file"
+
+policy:
+  allow_implicit_invocation: true

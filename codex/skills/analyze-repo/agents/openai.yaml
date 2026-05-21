@@ -1,0 +1,7 @@
+interface:
+  display_name: "Analyze Repo"
+  short_description: "Generate a deep repository analysis report"
+  default_prompt: "Use $analyze-repo to analyze this repository"
+
+policy:
+  allow_implicit_invocation: true

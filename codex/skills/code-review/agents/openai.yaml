@@ -1,0 +1,7 @@
+interface:
+  display_name: "Code Review"
+  short_description: "Multi-mode code review with actionable triage"
+  default_prompt: "Use $code-review to review code changes for production readiness"
+
+policy:
+  allow_implicit_invocation: true

@@ -1,8 +1,12 @@
-# Track only agents/ and skills/ — ignore everything else
+# Track only agents/, skills/, and Codex skill definitions — ignore everything else
 /*
 !.gitignore
 !agents/
 !skills/
+!codex/
+codex/*
+!codex/skills/
+!codex/skills/**
 
 # Inside skills: ignore symlinks (managed in their own repos)
 skills/domain-name-brainstormer
