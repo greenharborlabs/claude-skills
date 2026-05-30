@@ -41,6 +41,16 @@ Then stop.
 4. Sub-agent prompts must be self-contained.
 5. Escalate design-level or complex review failures to an Architect before Coder.
 6. Keep at most three sub-agents running at once.
+   - Maintain an `ACTIVE_AGENTS` set of spawned-but-not-closed agent IDs.
+   - Before every spawn, count `ACTIVE_AGENTS`; if it already has 3 entries,
+     call `wait_agent` on all active IDs, close any completed agents, remove
+     them from the set, and spawn only after the count is below 3.
+   - Add every newly spawned agent ID to `ACTIVE_AGENTS` immediately.
+   - Close completed Coder, Reviewer, Architect, specialist, and docs agents as
+     soon as their result has been captured, then remove them from
+     `ACTIVE_AGENTS`.
+   - Never spawn a fourth agent speculatively, even for a quick Reviewer or
+     retry; free a slot first.
 7. Do not push, force-push, reset hard, delete branches, deploy, or modify CI/CD
    without explicit user approval.
 
@@ -72,6 +82,8 @@ Then stop.
    - Before prompt construction, read [agent-prompts.md](references/agent-prompts.md).
    - For code-review-fix handling, read [review-loop.md](references/review-loop.md).
    - Re-read only the current wave/section at the start of each wave.
+   - Dispatch work through a bounded queue: at most 3 active sub-agents across
+     all Coders, Reviewers, Architects, docs agents, and specialists.
 6. Final verification.
    - Run the aggregate targeted test set only.
 7. Specialist reviews.

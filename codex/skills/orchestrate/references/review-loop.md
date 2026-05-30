@@ -33,6 +33,10 @@ files, running tests, or declaring success. No self-review.
 Exception: a Coder spawned only to fix failing tests after Reviewer PASS does not
 need another Reviewer.
 
+The Reviewer still counts against the global `ACTIVE_AGENTS` limit. If three
+agents are already active, wait for and close a completed agent before spawning
+the Reviewer.
+
 ## Acceptance Criteria Cross-Check
 
 After Reviewer returns:
@@ -79,6 +83,9 @@ Address every CRITICAL. Address WARNING unless it violates spec. Do not expand s
 
 If FAIL and `COMPLEX_ISSUES: YES`, spawn Architect first, then Coder, then Reviewer.
 The cycle counter does not reset after architect escalation.
+
+Architect and fix Coder agents also count against `ACTIVE_AGENTS`; free a slot
+before each spawn.
 
 After 3 cycles, stop on remaining CRITICAL issues. Persist WARNING/INFO in the
 summary but do not block.

@@ -22,6 +22,20 @@ Group sizing:
 - Max 3 tasks per work group.
 - Max 3 running sub-agents total.
 
+## Bounded Sub-Agent Queue
+
+Use an explicit `ACTIVE_AGENTS` set for every wave.
+
+- Before spawning, if `ACTIVE_AGENTS` has 3 IDs, wait on all active IDs until at
+  least one completes.
+- Capture the completed agent's report, close that agent immediately, and remove
+  it from `ACTIVE_AGENTS`.
+- Add each newly spawned agent ID to `ACTIVE_AGENTS` immediately.
+- Do not spawn Coder retries, Reviewers, Architects, specialists, or docs agents
+  until a slot is available.
+- Prefer batches of 3 work groups, then refill one slot at a time as agents
+  finish. Do not launch the whole wave at once.
+
 ## Coder Prompt
 
 ```text
