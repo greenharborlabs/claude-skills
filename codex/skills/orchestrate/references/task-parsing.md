@@ -42,10 +42,34 @@ Wire dependencies with blocked-by/blocks relationships.
 
 Resume mode:
 
+- Store checkpoints in `.orchestrate/<plan-file-basename>-<plan-hash>.json`.
+- If the checkpoint path would collide, prefer the matching `plan_path` and
+  `plan_hash`; otherwise create a new checkpoint.
+- Keep checkpoint state compact:
+
+```json
+{
+  "plan_path": "<path>",
+  "plan_hash": "<content hash>",
+  "start_commit": "<START_COMMIT>",
+  "tasks": {"<id>": "pending|in_progress|completed|blocked"},
+  "blocked_reasons": {"<id>": "<short reason>"},
+  "gates": {"final_verification": "pending|completed", "specialist_review": "pending|completed"},
+  "touched_tests": ["<path>"],
+  "contract_registry": [{"file": "<path>", "name": "<symbol>", "signature": "<compact signature>"}],
+  "agent_suite": {"coder": "<agent>", "reviewer": "<agent>", "architect": "<agent>"},
+  "test_cmd": "<literal command template>"
+}
+```
+
 - `completed`: skip.
 - `in_progress`: reset to pending.
 - `pending`: reuse.
+- `blocked`: keep blocked unless its dependency context changed or the user
+  scopes directly to that task.
 - Create only unmatched work units.
+- Update the checkpoint after each work group completes, blocks, or changes gate
+  state. Do not store raw diffs, full reports, or file contents.
 
 Create sentinel tasks:
 

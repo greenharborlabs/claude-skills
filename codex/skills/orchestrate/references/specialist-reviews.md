@@ -60,7 +60,8 @@ If any CRITICAL:
 2. Spawn Coder with a surgical specialist-fix prompt.
 3. Run targeted tests.
 4. Max 2 fix cycles.
-5. Do not re-run specialists.
+5. Run one targeted specialist recheck limited to the files and findings fixed.
+   Do not rerun the full specialist audit.
 
 Warnings and info are logged only unless the user explicitly requests fixes.
 

@@ -56,7 +56,8 @@ Then stop.
 ## Workflow
 
 1. Pre-flight.
-   - Run `git status`; if dirty, stop and ask whether to continue, commit, or stash.
+   - Run `git status`; if dirty, stop unless the user explicitly confirms
+     continuing from the current working tree.
    - Record `START_COMMIT` with `git rev-parse HEAD`.
    - Optionally run a quick smoke test if the plan references an obvious test command.
 2. Parse plan and scope.

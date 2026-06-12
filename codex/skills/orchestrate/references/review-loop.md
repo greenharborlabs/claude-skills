@@ -41,7 +41,7 @@ the Reviewer.
 
 After Reviewer returns:
 
-1. Count reviewed criteria against the spec excerpt.
+1. Count reviewed criteria against the provided AC-ID list.
 2. Missing criteria become FAIL.
 3. For each PASS, ensure the evidence file/line appears in the diff already in
    context. If not, downgrade to FAIL.

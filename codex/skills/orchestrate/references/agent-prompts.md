@@ -11,6 +11,9 @@ Before each batch:
 - Max `1 search per task + 1 baseline`.
 - Prefer targeted line ranges.
 - Use the contract registry instead of re-reading prior batch interfaces.
+- Extract acceptance criteria once per work group into compact IDs (`AC-01`,
+  `AC-02`, ...). Preserve the exact criterion text in that list; reference IDs
+  elsewhere instead of repeating long prose.
 
 For each task identify only entry points, required signatures/contracts, and
 affected test files.
@@ -43,7 +46,7 @@ Use an explicit `ACTIVE_AGENTS` set for every wave.
 <imperative work group title>
 
 ## Spec excerpt
-<verbatim relevant plan section, including acceptance criteria>
+<short relevant plan excerpt; omit unrelated background>
 
 ## Files to modify
 <file paths + relevant line ranges>
@@ -55,7 +58,7 @@ Use an explicit `ACTIVE_AGENTS` set for every wave.
 <test files>
 
 ## Success criteria
-<explicit checkable criteria>
+<AC-ID list with exact criterion text>
 
 ## TDD sequencing
 If the plan includes Test spec:
@@ -112,7 +115,7 @@ input in sensitive operations.
 Review implementation against the spec.
 
 ## Spec excerpt(s)
-<verbatim spec sections>
+<short relevant spec excerpt; omit unrelated background>
 
 ## Coder self-test result
 <PASS/FAIL details>
@@ -121,10 +124,11 @@ Review implementation against the spec.
 <NEW_INTERFACES, if any>
 
 ## Diff to review
-<git diff for changed files; use -U30, reduce to -U10 or split if too large>
+<git diff for changed files; default -U8, expand to -U20 only when needed;
+split by file for large work groups>
 
 ## Success criteria
-<same criteria given to coder>
+<same AC-ID list given to coder>
 
 ## Acceptance Criteria Verification (MANDATORY)
 For EACH criterion, output:
@@ -134,7 +138,7 @@ CRITERIA_CHECKLIST:
   [PARTIAL] "criterion text" - <exists> / <missing>
 
 Rules:
-- Copy criteria verbatim.
+- Copy each AC-ID and criterion text verbatim from the provided list.
 - Any FAIL/PARTIAL is CRITICAL.
 - Evidence must point to a line in the diff.
 

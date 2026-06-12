@@ -15,7 +15,7 @@ Otherwise scan the plan file's `**Files:**` sections plus a quick project-root g
 | `*.py` + `openclaw`/`alpaca`/`kalshi` | `openclaw-coder` | `openclaw-reviewer` | `openclaw-architect` | `pytest <pattern>` |
 | `*.ts`/`*.tsx` + `vitest` | `frontend-impl` | `frontend-reviewer` | `frontend-architect` | `npx vitest run <pattern>` |
 | `*.ts`/`*.tsx` + `jest` no NanoClaw | `frontend-impl` | `frontend-reviewer` | `frontend-architect` | `npx jest --testPathPattern="<pattern>" --no-coverage` |
-| `*.py` generic | general-purpose | general-purpose | general-purpose | `pytest <pattern>` |
+| `*.py` generic | `backend-coder-python` | `backend-reviewer-python` | `backend-planning-architect-python` | `pytest <pattern>` |
 | Mixed/unknown | ask with detected signals | ask | ask | ask |
 
 For Gradle multi-project builds, prefix the module, e.g.
@@ -37,9 +37,10 @@ Test command: <TEST_CMD>
 | Signal | Security Reviewer | API Contract Reviewer |
 | --- | --- | --- |
 | Java/Gradle/Maven | `backend-security-reviewer-java` | `backend-api-contract-reviewer-java` only if API files changed |
+| Python | `backend-security-reviewer-python` only if security-sensitive files changed | `backend-api-contract-reviewer-python` only if API/CLI contract files changed |
 | Other stacks | skip | skip |
 
-Spawn API contract reviewer only if aggregate diff touches:
+For Java, spawn API contract reviewer only if aggregate diff touches:
 
 - `*Controller.java`
 - `*Resource.java`
@@ -48,5 +49,19 @@ Spawn API contract reviewer only if aggregate diff touches:
 - `*Response.java`
 - `*ControllerAdvice.java`
 - `openapi.*`
+
+For Python, spawn security reviewer if aggregate diff touches files or code paths
+with security-sensitive names or content:
+
+- `*auth*.py`, `*security*.py`, `*credential*.py`, `*secret*.py`
+- `*payer*.py`, `*wallet*.py`, `*payment*.py`, `*token*.py`
+- config/env handling, redaction, subprocess, filesystem state, or HTTP client code
+
+For Python, spawn API contract reviewer if aggregate diff touches:
+
+- FastAPI/Flask route modules, `api/**/*.py`, `routes/**/*.py`, `views/**/*.py`
+- Typer/Click/argparse CLI modules such as `cli.py`
+- public SDK exports in `__init__.py`
+- request/response/schema/model files, error envelope code, or `openapi.*`
 
 Performance and concurrency concerns remain in the standard per-task reviewer.

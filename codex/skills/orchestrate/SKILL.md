@@ -41,16 +41,6 @@ Then stop.
 4. Sub-agent prompts must be self-contained.
 5. Escalate design-level or complex review failures to an Architect before Coder.
 6. Keep at most three sub-agents running at once.
-   - Maintain an `ACTIVE_AGENTS` set of spawned-but-not-closed agent IDs.
-   - Before every spawn, count `ACTIVE_AGENTS`; if it already has 3 entries,
-     call `wait_agent` on all active IDs, close any completed agents, remove
-     them from the set, and spawn only after the count is below 3.
-   - Add every newly spawned agent ID to `ACTIVE_AGENTS` immediately.
-   - Close completed Coder, Reviewer, Architect, specialist, and docs agents as
-     soon as their result has been captured, then remove them from
-     `ACTIVE_AGENTS`.
-   - Never spawn a fourth agent speculatively, even for a quick Reviewer or
-     retry; free a slot first.
 7. Do not push, force-push, reset hard, delete branches, deploy, or modify CI/CD
    without explicit user approval.
 
@@ -66,7 +56,8 @@ Then stop.
 ## Workflow
 
 1. Pre-flight.
-   - Run `git status`; if dirty, stop and ask whether to continue, commit, or stash.
+   - Run `git status`; if dirty, stop unless the user explicitly confirms
+     continuing from the current working tree.
    - Record `START_COMMIT` with `git rev-parse HEAD`.
    - Optionally run a quick smoke test if the plan references an obvious test command.
 2. Parse plan and scope.
