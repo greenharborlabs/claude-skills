@@ -2,6 +2,21 @@
 
 Load this immediately before spawning architect reviewer agents.
 
+## Architect Agent Detection
+
+Use max 2 glob calls:
+
+| Signal | Architect |
+| --- | --- |
+| `*.java`, `*.gradle`, `pom.xml` | `backend-planning-architect` |
+| `*.ts`/`*.tsx` + React signals | `frontend-architect` |
+| `nanoclaw`/`container` signals | `nanoclaw-architect` |
+| `*.py` + `openclaw`/`alpaca`/`kalshi` | `openclaw-architect` |
+| Mixed/unknown | `backend-planning-architect` fallback |
+
+Record a secondary architect only when the plan itself crosses stack boundaries,
+not merely because the repo is a monorepo.
+
 ## Primary Architect Prompt
 
 ```text
@@ -68,7 +83,8 @@ Security:        [HIGH|MEDIUM|LOW] - [reason] (skip in eng mode)
 
 Eng-mode adjustment: if the plan has <=3 units and touches <=5 files, ask the
 architect to skip checklist items 5-6 and score only Architecture, Error
-Handling, and Test Strategy.
+Handling, and Test Strategy. Use a micro-review budget: max 4 file reads and max
+3 searches.
 
 ## Secondary Architect
 

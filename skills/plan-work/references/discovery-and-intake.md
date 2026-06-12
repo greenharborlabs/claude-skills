@@ -75,18 +75,3 @@ Questions:
 - Q4 key decision, only if ambiguity remains after scan.
 
 Every question: one issue, recommendation first, lettered options, no batching.
-
-## Architect Agent Detection
-
-Use max 2 glob calls:
-
-| Signal | Architect |
-| --- | --- |
-| `*.java`, `*.gradle`, `pom.xml` | `backend-planning-architect` |
-| `*.ts`/`*.tsx` + React signals | `frontend-architect` |
-| `nanoclaw`/`container` signals | `nanoclaw-architect` |
-| `*.py` + `openclaw`/`alpaca`/`kalshi` | `openclaw-architect` |
-| Mixed/unknown | `backend-planning-architect` fallback |
-
-Record a secondary architect only when the plan itself crosses stack boundaries,
-not merely because the repo is a monorepo.

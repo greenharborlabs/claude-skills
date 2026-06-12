@@ -12,12 +12,15 @@ git diff <BRANCH_REF> --stat
 git rev-parse --short HEAD
 ```
 
-Read `CLAUDE.md`, `TODOS.md`, and relevant architecture/plan docs when present.
-Record the short commit hash in the plan header.
+Read `CLAUDE.md` when present. Read `TODOS.md` only if the request appears to
+intersect current work. For architecture/plan docs, use `rg` or filenames first,
+then read at most 2 targeted docs. Record the short commit hash in the plan
+header.
 
 If `--review <path>` is provided, read it. Otherwise check for recent
-`reports/review-*.md` files and read one recent report if useful. Extract design
-findings as plan inputs; implementation findings are context only.
+`reports/review-*.md` files only when the filename or heading contains a term
+from the user request; read at most one matching report. Extract design findings
+as plan inputs; implementation findings are context only.
 
 ## Exploration
 
@@ -129,6 +132,11 @@ CURRENT STATE          THIS PLAN              12-MONTH IDEAL
 - Acceptance criteria must be independently verifiable.
 - Test specs seed TDD: behavioral tests first, public interfaces only, mock only external boundaries.
 - If plan touches more than 8 files in `eng` mode, justify it or propose a simpler alternative.
+- For narrow `eng` plans, use a compact shape: Summary, Existing Code Leverage,
+  Blast Radius, Waves, Failure Modes Summary, Architect Review Findings,
+  Confidence Assessment, and Orchestration Playbook. Omit empty optional sections.
+- In compact `eng` plans, make Architecture one short paragraph unless the work
+  crosses module, service, persistence, or API boundaries.
 
 Before writing, if `--out` already exists, ask whether to overwrite, choose a new
 path, or read/build on the existing plan.
