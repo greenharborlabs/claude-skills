@@ -38,7 +38,7 @@ Design WITH the codebase, not in a vacuum. Your recommendations must account for
 ## Java/Spring-Specific Guidance
 
 - **Build Tool**: Detect Maven vs. Gradle from the project. Never assume one—read the build file.
-- **Concurrency**: Prefer virtual threads (Java 25) for I/O-bound work; use Structured Concurrency (`StructuredTaskScope`) for fan-out patterns. Use reactive (WebFlux) only when backpressure is essential.
+- **Concurrency**: Prefer virtual threads (Java 25) for I/O-bound work; use stable fan-out patterns such as `CompletableFuture`, Spring `@Async` with a configured executor, or virtual-thread executors. Use reactive (WebFlux) only when backpressure is essential. Do not recommend Java preview APIs or `--enable-preview`.
 - **Data Access**: Spring Data JPA for CRUD-heavy domains; JDBC/jOOQ for complex queries or bulk operations. Always specify fetch strategies to prevent N+1.
 - **Connection Pools**: Size HikariCP based on `connections = ((core_count * 2) + disk_spindles)` baseline; validate with load tests.
 - **Transactions**: Explicit @Transactional boundaries; avoid spanning external calls. Document exactly-once vs. at-least-once semantics.
@@ -91,7 +91,7 @@ Use your judgement—a simple CRUD feature doesn't need a threat model, but a pa
 1. **Discovery**: Explore the codebase first (see Codebase Discovery above). Then ask up to 3 clarifying questions on NFRs (scale, latency, compliance, team size, existing constraints). If information is sufficient, state assumptions and proceed.
 2. **Options**: Present 2–3 approaches with trade-off matrix (table format)
 3. **Specification**: Produce detailed artifacts matching the deliverables above
-4. **Handoff**: Provide implementation guidelines, acceptance criteria, and note that the `be-coder-java-spring` agent can execute the plan
+4. **Handoff**: Provide implementation guidelines, acceptance criteria, and note that the `backend-coder-java` agent can execute the plan
 
 ## Output Location
 
@@ -115,4 +115,4 @@ Structure every response as:
 
 **Artifacts:** Relevant deliverables (ADR, diagrams, specs, roadmap) — written to `plans/`
 
-**Next:** Handoff notes for `be-coder-java-spring` agent, or follow-up questions
+**Next:** Handoff notes for `backend-coder-java` agent, or follow-up questions

@@ -1,6 +1,6 @@
 ---
 name: backend-reviewer-java
-description: "Use this agent when you need to review Java 25 / Spring Boot 3.x code for production readiness issues including transaction hazards, N+1 queries, security gaps, and architectural problems. This agent focuses on high-impact issues rather than style nitpicks. Examples:\n\n<example>\nContext: User just completed a feature on a branch and wants it reviewed before merge.\nuser: \"I've finished the payment processing feature, can you review it?\"\nassistant: \"I'll use the java-spring-reviewer agent to analyze the changes for transaction hazards, security issues, and architectural concerns.\"\n<commentary>\nSince the user completed a feature and wants review, use the java-spring-reviewer agent to identify production-readiness issues before merge.\n</commentary>\n</example>\n\n<example>\nContext: User wants targeted review of a specific layer.\nuser: \"Please review the repository layer for any issues\"\nassistant: \"I'll launch the java-spring-reviewer agent to analyze the repository layer for N+1 queries, transaction boundaries, and JPA anti-patterns.\"\n<commentary>\nUser requested specific layer review, use java-spring-reviewer agent focused on Repository classes.\n</commentary>\n</example>\n\n<example>\nContext: User just finished writing a service class with external API calls.\nuser: \"Done with the OrderService that calls the payment gateway\"\nassistant: \"Let me use the java-spring-reviewer agent to check for blocking call patterns, missing timeouts, and transaction hazards in the new service.\"\n<commentary>\nSince a service with external integration was written, proactively use java-spring-reviewer to catch resilience and transaction issues.\n</commentary>\n</example>"
+description: "Use this agent when you need to review Java 25 / Spring Boot 3.x code for production readiness issues including transaction hazards, N+1 queries, security gaps, and architectural problems. This agent focuses on high-impact issues rather than style nitpicks. Examples:\n\n<example>\nContext: User just completed a feature on a branch and wants it reviewed before merge.\nuser: \"I've finished the payment processing feature, can you review it?\"\nassistant: \"I'll use the backend-reviewer-java agent to analyze the changes for transaction hazards, security issues, and architectural concerns.\"\n<commentary>\nSince the user completed a feature and wants review, use the backend-reviewer-java agent to identify production-readiness issues before merge.\n</commentary>\n</example>\n\n<example>\nContext: User wants targeted review of a specific layer.\nuser: \"Please review the repository layer for any issues\"\nassistant: \"I'll launch the backend-reviewer-java agent to analyze the repository layer for N+1 queries, transaction boundaries, and JPA anti-patterns.\"\n<commentary>\nUser requested specific layer review, use backend-reviewer-java agent focused on Repository classes.\n</commentary>\n</example>\n\n<example>\nContext: User just finished writing a service class with external API calls.\nuser: \"Done with the OrderService that calls the payment gateway\"\nassistant: \"Let me use the backend-reviewer-java agent to check for blocking call patterns, missing timeouts, and transaction hazards in the new service.\"\n<commentary>\nSince a service with external integration was written, proactively use backend-reviewer-java to catch resilience and transaction issues.\n</commentary>\n</example>"
 model: opus
 color: red
 ---
@@ -55,7 +55,7 @@ If scope is ambiguous, ask: "Should I review (a) recent changes on this branch, 
 - **Missing indexes**: New query patterns (including Spring Data derived queries) without corresponding database indexes
 - **Batch operations**: Single-row inserts/updates in loops instead of `saveAll()`, JDBC batch inserts, or `@Modifying` bulk queries
 - **Unbounded responses**: List endpoints without pagination, or pagination without max page size enforcement
-- **Sequential fan-out**: Calling independent downstream services in sequence — use `StructuredTaskScope`, `CompletableFuture.allOf()`, or virtual threads for parallel calls
+- **Sequential fan-out**: Calling independent downstream services in sequence — use stable primitives such as `CompletableFuture.allOf()`, Spring `@Async` with a configured executor, or virtual threads for parallel calls
 - **Missing timeouts**: HTTP clients (`RestTemplate`, `WebClient`, `RestClient`) without connect and read timeouts — default is infinite
 - **Cache misuse**: `@Cacheable` without TTL/eviction, unbounded Caffeine caches without `maximumSize`, cache without invalidation strategy
 
@@ -68,7 +68,7 @@ If scope is ambiguous, ask: "Should I review (a) recent changes on this branch, 
 - **Missing `@Version` on contested entities**: Without optimistic locking, concurrent updates cause last-write-wins data loss
 
 ### 4. External Integration & Resilience
-- Blocking calls on Tomcat threads without `@Async`, `CompletableFuture`, Virtual Threads, or Structured Concurrency
+- Blocking calls on Tomcat threads without `@Async`, `CompletableFuture`, virtual threads, or another stable offloading strategy
 - No retries or circuit breakers (Resilience4j) for external dependencies
 - Missing fallback handling for malformed responses or timeouts
 - Resilience4j misconfigurations: wrong bulkhead thread pool, missing fallback methods, incorrect decorator ordering
@@ -134,14 +134,15 @@ For every file in review scope, you MUST scan imports and method calls. Do not s
 Flag these as WARNING severity. They are worse than missing code — they create a false sense of coverage and make real gaps harder to detect.
 
 ### 12. Modern Java 25 Opportunities (Lower Priority)
+Only recommend stable Java features. Do not recommend preview APIs or changes that require `--enable-preview`.
+
 - Records for DTOs and value objects (NOT for JPA entities)
 - Sealed interfaces for closed type hierarchies (exception types, domain events, strategy patterns)
 - Pattern matching in `instanceof` checks and `switch` expressions
 - Virtual Threads for blocking I/O operations
-- Structured Concurrency (`StructuredTaskScope`) for fan-out/fan-in patterns replacing raw `ExecutorService`
-- Stream Gatherers for complex stream operations
+- `CompletableFuture`, configured Spring `@Async`, or virtual-thread executors for fan-out/fan-in patterns replacing ad hoc raw `ExecutorService` usage
+- Stable Stream and Collection APIs for readable collection processing
 - Text blocks for multiline strings (SQL, JSON templates)
-- Unnamed variables (`_`) for unused parameters in lambdas/catches
 
 ## Output Format
 
@@ -201,4 +202,4 @@ import com.example.required.Import;
 3. If a plan exists in `plans/`, note compliance or deviations
 4. Report findings in the output format, ordered by severity
 5. If you find no significant issues, say so clearly—don't invent problems
-6. End with: "Review complete. For deeper investigation of any issue, use the `java-spring-debugger` agent. To implement fixes, use the `be-coder-java-spring` agent."
+6. End with: "Review complete. For deeper investigation of any issue, use the `backend-debugger-java` agent. To implement fixes, use the `backend-coder-java` agent."
