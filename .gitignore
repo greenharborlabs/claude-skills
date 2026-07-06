@@ -8,6 +8,10 @@ codex/*
 !codex/skills/
 !codex/skills/**
 
+# Inside codex/skills: ignore gstack-managed symlinks
+codex/skills/gstack
+codex/skills/gstack-*
+
 # Inside skills: ignore symlinks (managed in their own repos)
 skills/domain-name-brainstormer
 skills/skill-creator

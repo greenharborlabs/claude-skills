@@ -79,6 +79,9 @@ CURRENT STATE          THIS PLAN              12-MONTH IDEAL
 | Modified File/Interface | Consumers | Covered by Work Unit? |
 | --- | --- | --- |
 
+## Risk Flags
+`security`: no | `performance`: no | `migration`: no | `public-api`: no | `concurrency`: no
+
 ## Wave 1: [Foundation]
 
 ### W1-01: [Imperative title]
@@ -99,8 +102,11 @@ CURRENT STATE          THIS PLAN              12-MONTH IDEAL
 ## NOT in Scope
 - [Deferred item] - [rationale]
 
-## Security Considerations *(--spec only)*
+## Security Considerations *(required for --spec or security/public-api risk)*
 [Trust boundaries, validation points, injection/auth surface]
+
+## Performance Considerations *(required for --spec or performance/concurrency risk)*
+[Expected hot paths, query/cache behavior, async/concurrency concerns, cheap verification command]
 
 ## Failure Modes Summary
 | Codepath | Failure Mode | Handled In | Tested? |
@@ -131,10 +137,14 @@ CURRENT STATE          THIS PLAN              12-MONTH IDEAL
 - Units within the same wave must be independent.
 - Acceptance criteria must be independently verifiable.
 - Test specs seed TDD: behavioral tests first, public interfaces only, mock only external boundaries.
+- Include `## Risk Flags` in every plan. Mark `yes` only when the work touches
+  trust boundaries, hot paths, migrations, public contracts, shared interfaces,
+  or concurrent/asynchronous behavior.
 - If plan touches more than 8 files in `eng` mode, justify it or propose a simpler alternative.
 - For narrow `eng` plans, use a compact shape: Summary, Existing Code Leverage,
-  Blast Radius, Waves, Failure Modes Summary, Architect Review Findings,
-  Confidence Assessment, and Orchestration Playbook. Omit empty optional sections.
+  Blast Radius, Risk Flags, Waves, Failure Modes Summary, Architect Review
+  Findings, Confidence Assessment, and Orchestration Playbook. Omit empty
+  optional sections.
 - In compact `eng` plans, make Architecture one short paragraph unless the work
   crosses module, service, persistence, or API boundaries.
 

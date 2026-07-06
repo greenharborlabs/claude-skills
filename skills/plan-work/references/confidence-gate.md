@@ -23,8 +23,12 @@ Default dimensions:
 - Test Strategy: test type coverage and specificity.
 - Data Flow: happy path and error-path tracing.
 - Security: auth, validation, injection/trust boundaries.
+- Performance: hot paths, query/cache behavior, concurrency, async work, and
+  cheap verification command.
 
-Eng mode scores only Architecture, Error Handling, and Test Strategy.
+Eng mode scores Architecture, Error Handling, and Test Strategy by default. Also
+score Security, Performance, Data Flow, or migration/public API impact whenever
+the plan's `## Risk Flags` mark the matching risk as `yes`.
 
 ## Gate Flow
 
@@ -33,8 +37,8 @@ Eng mode scores only Architecture, Error Handling, and Test Strategy.
 2. Present a compact confidence map to the user only when CRITICAL findings or LOW
    scores need a decision.
 3. Ask at most two questions per round. Prioritize Architecture, Error Handling,
-   Test Strategy, Data Flow, Security, unless the plan is clearly security- or
-   migration-heavy.
+   Test Strategy, Data Flow, Security, Performance, unless the plan is clearly
+   security-, migration-, public-API-, or performance-heavy.
 4. Re-draft only affected sections.
 5. Run delta re-review only for structural changes.
 6. Gate passes when all dimensions are at least MEDIUM and all CRITICAL findings

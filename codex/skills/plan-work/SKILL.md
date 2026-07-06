@@ -99,9 +99,10 @@ Then stop.
 The final plan file must include:
 
 - Summary, existing code leverage, architecture, blast radius, waves, not-in-scope,
-  failure modes, architect findings, confidence assessment, and orchestration playbook.
-- `--spec` also adds data-flow diagrams, error/rescue tables, effort sizing, and
-  security considerations.
+  risk flags, failure modes, architect findings, confidence assessment, and
+  orchestration playbook.
+- `--spec` also adds data-flow diagrams, error/rescue tables, effort sizing,
+  security considerations, and performance considerations.
 
 After writing, print: plan path, mode, wave/work-unit count, architect findings
 summary, confidence scores, gate result, and the recommended `/orchestrate` command.

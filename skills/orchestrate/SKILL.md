@@ -1,6 +1,14 @@
 ---
 name: orchestrate
 description: "Token-lean SWE-manager orchestrator. Parses a spec/task/plan file, resolves a task graph and agent suite, then delegates implementation to focused coder sub-agents followed by mandatory reviewer sub-agents in code-review-fix cycles. Auto-detects Java, NanoClaw, OpenClaw, React, and Python stacks, or accepts --coder/--reviewer/--architect overrides. Use when the user wants to execute a plan file, e.g. 'orchestrate plans/feature-x.md'. Supports --scope, --resume, --dry-run, --docs, and --branch."
+allowed-tools:
+  - Read
+  - Grep
+  - Glob
+  - Bash
+  - Write
+  - Agent
+  - AskUserQuestion
 ---
 
 # Orchestrate
@@ -58,6 +66,8 @@ Then stop.
 1. Pre-flight.
    - Run `git status`; if dirty, stop unless the user explicitly confirms
      continuing from the current working tree.
+   - Exception: continue without confirmation when the only dirty paths are the
+     target plan file and/or `.orchestrate/` checkpoint files.
    - Record `START_COMMIT` with `git rev-parse HEAD`.
    - Optionally run a quick smoke test if the plan references an obvious test command.
 2. Parse plan and scope.
@@ -73,8 +83,16 @@ Then stop.
    - Before prompt construction, read [agent-prompts.md](references/agent-prompts.md).
    - For code-review-fix handling, read [review-loop.md](references/review-loop.md).
    - Re-read only the current wave/section at the start of each wave.
+   - Dispatch work through a bounded queue: at most 3 active sub-agents across
+     all Coders, Reviewers, Architects, docs agents, and specialists.
+   - After each wave completes, stop and print a concise wave completion
+     summary before advancing. Include a business/manager summary and a
+     developer/technical summary that explain what completed, what it solved,
+     and why it mattered. Wait for the user to continue.
 6. Final verification.
-   - Run the aggregate targeted test set only.
+   - Run the aggregate targeted test set only, plus the cheapest relevant
+     package-level confidence command when risk flags or shared interfaces
+     justify it.
 7. Specialist reviews.
    - Read [specialist-reviews.md](references/specialist-reviews.md) only after
      implementation and final targeted tests pass.
@@ -87,6 +105,7 @@ Then stop.
 
 After each wave, stop referencing raw diffs, coder reports, reviewer reports, and
 file contents. Carry forward only task status, blocked task reasons, `START_COMMIT`,
-agent suite, `TEST_CMD`, touched test files, and the lightweight contract registry.
+agent suite, `TEST_CMD`, touched test files, the lightweight contract registry,
+and the concise wave completion summary.
 
 At the start of the next wave, re-read the relevant plan section as source of truth.

@@ -113,15 +113,53 @@ After review and targeted tests pass:
   updated interfaces, remove stale entries.
 - Print batch progress.
 
+## Wave Completion Summary
+
+After all tasks in a wave pass review and targeted tests, stop before starting
+the next wave. Print a concise summary in this shape:
+
+```text
+Wave N complete.
+
+Business / manager summary:
+- What completed:
+- What it solved:
+- Why it mattered:
+
+Developer / technical summary:
+- What changed:
+- Tests / review:
+- Technical impact:
+```
+
+Keep each bullet short unless detail is needed for a decision, blocker, or
+material risk. Do not paste raw diffs or long agent reports. Wait for the user
+to confirm before advancing to the next wave.
+
 After each wave, discard raw file contents, diffs, Coder reports, Reviewer output,
 and spec excerpts. Carry forward only task status, blocked reasons, `START_COMMIT`,
-agent suite, `TEST_CMD`, touched tests, and contract registry.
+agent suite, `TEST_CMD`, touched tests, contract registry, and the concise wave
+completion summary.
 
 ## Final Verification
 
-After all batches complete, run the aggregate targeted test set only. On success,
-mark `final-verification-gate` complete. On failure, report and stop before docs
-or specialist reviews.
+After all batches complete, run the aggregate targeted test set.
+
+Also run the cheapest relevant package-level confidence command when any of these
+are true:
+
+- The plan marks `security`, `performance`, `migration`, `public-api`, or
+  `concurrency` risk as `yes`.
+- The contract registry contains changed public interfaces.
+- A work unit changed shared utilities, build/config files, generated schemas,
+  migrations, or package exports.
+
+Examples: compile/typecheck for the touched package, module-level unit tests,
+targeted lint for changed files, or migration validation. Do not run a full
+suite/build unless the user explicitly approves it.
+
+On success, mark `final-verification-gate` complete. On failure, report and stop
+before docs or specialist reviews.
 
 ## Abort And Rollback Messaging
 
@@ -129,7 +167,8 @@ On user interrupt:
 
 ```text
 Orchestration interrupted. All changes since START_COMMIT (<short hash>) are in the working tree.
-To review: git diff <START_COMMIT>..HEAD
+To review committed changes: git diff <START_COMMIT>..HEAD
+To review working tree changes: git diff <START_COMMIT>
 To keep: continue working from current state
 To undo: git reset <START_COMMIT>
 ```

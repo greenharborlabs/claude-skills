@@ -6,9 +6,15 @@ Load only after all batches and final targeted verification pass.
 
 Skip if no specialist reviewers were resolved. For Java stacks:
 
-- Security reviewer always runs.
-- API contract reviewer runs only when aggregate diff touches controller,
-  resource, DTO, request/response, controller advice, or OpenAPI files.
+- Security reviewer runs when `security` risk is `yes` or security-sensitive
+  files changed.
+- API contract reviewer runs when `public-api` risk is `yes` or aggregate diff
+  touches controller, resource, DTO, request/response, controller advice, or
+  OpenAPI files.
+
+For Python, use the same risk-flag and file-trigger rules from stack detection.
+For React/TypeScript, run `frontend-reviewer` as a focused specialist when
+`security`, `public-api`, `performance`, or `concurrency` risk is `yes`.
 
 ## Collect Context
 
@@ -29,7 +35,7 @@ If diff is >500 lines, focus each specialist on domain-relevant files.
 Review ALL changes from this orchestration run.
 
 ## Plan context
-<plan Summary section>
+<plan Summary section + Risk Flags>
 
 ## Aggregate diff (against <REVIEW_BASE>)
 <diff>
