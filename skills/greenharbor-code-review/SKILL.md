@@ -48,6 +48,7 @@ Flags:
   --branch <name>        Alias for --baseline (e.g. --branch develop)
   --critical-only        Only report CRITICAL findings
   --fix                  Auto-apply fixes for CRITICAL IMPL issues (skips interactive)
+  --interactive          Prompt on CRITICAL findings after reporting
   --out <path>           Write report to file (auto-generated for non-diff modes)
   --plan                 (--full only) Also write decomposition plan files
 
@@ -55,7 +56,7 @@ Output:
   Findings are classified into two resolution paths:
   - DESIGN items → need /greenharbor-plan-work before implementation
   - IMPL items   → surgical fixes, ready for /greenharbor-orchestrate
-  IMPL findings are also written to an orchestrate-ready mini-plan file.
+  CRITICAL IMPL findings are also written to an orchestrate-ready mini-plan file.
   Each finding includes a copy-paste command to kick off the next workflow.
 
 Examples:
@@ -86,12 +87,29 @@ Parse the invocation arguments:
   - `--baseline <ref>` or `--branch <ref>` → custom diff base (default: `origin/main`). Only applies to DIFF mode. `--branch` is an alias for `--baseline`.
   - `--critical-only` → suppress INFORMATIONAL findings in output
   - `--fix` → auto-apply CRITICAL fixes without interactive prompts
-  - `--out <path>` → write final report to this file path. In SCOPE, FULL, and FLOW modes, if `--out` is not specified, auto-generate a report file at `reports/greenharbor-code-review-<mode>-<YYYY-MM-DD>.md` (create the `reports/` directory if needed). In DIFF mode, `--out` is optional — output goes to stdout only unless specified.
+  - `--interactive` → prompt on CRITICAL findings after reporting
+  - `--out <path>` → write final report to this file path. In SCOPE, FULL, and FLOW modes, if `--out` is not specified, auto-generate a report file at `reports/greenharbor-code-review-<mode>-<YYYY-MM-DD>.md` (create the `reports/` directory if needed). In DIFF mode, `--out` is optional unless an IMPL mini-plan is generated.
   - `--plan` → (FULL mode only) write decomposition plan files to `plans/greenharbor-code-review/`
 
 ---
 
-## Step 2: Resolve review scope
+## Step 2: Token-aware intake
+
+Before reading code, diffs, or launching agents, size the review and choose the smallest sufficient input.
+
+1. Start with metadata: `git diff --stat`, `git diff --numstat`, and `git diff --name-only` for DIFF mode; file counts and line counts for SCOPE/FULL/FLOW.
+2. Exclude generated, binary, vendored, build, lock, snapshot, and minified files unless they are the explicit target.
+3. Prefer patches over whole files in DIFF mode. Read whole files only when the patch lacks enough context to verify a finding.
+4. Batch large inputs before sending to agents:
+   - DIFF: max 20 changed files or 1,200 patch lines per agent prompt.
+   - SCOPE/FLOW: max 20 source files or 4,000 source lines per agent prompt.
+   - FULL: max 15 files or 3,000 source lines per section.
+5. Keep batch notes terse: confirmed findings, false-positive suppressions, and unresolved context needed. Do not carry raw code between batches.
+6. If limits are exceeded, report the batching plan before review and continue section by section.
+
+---
+
+## Step 3: Resolve review scope
 
 Based on the mode, determine which files are in scope for review.
 
@@ -100,10 +118,10 @@ Based on the mode, determine which files are in scope for review.
 1. Determine the baseline ref. Default is `origin/main`. If `--baseline` was provided, use that value instead.
 2. Run `git branch --show-current` to get the current branch.
 3. If on `main` and baseline is `origin/main` and there are no uncommitted changes, output: **"Nothing to review — you're on main with no changes."** and stop.
-4. Run `git fetch origin --quiet` then `git diff <baseline> --stat` to check for a diff. If no diff, output **"No changes found against `<baseline>`."** and stop.
-5. Run `git diff <baseline> --name-only` to get the **file list**.
-6. Run `git diff <baseline>` to get the **full diff content**.
-7. The **review input** is the diff content. The **file list** is used for stack detection.
+4. Run `git fetch origin --quiet` when `origin` exists.
+5. Run `git diff <baseline> --stat`, `git diff <baseline> --numstat`, and `git diff <baseline> --name-only`. If no diff, output **"No changes found against `<baseline>`."** and stop.
+6. Read patch content in token-aware batches using `git diff <baseline> -- <file...>`. Use `--unified=80` only for files needing broader context.
+7. The **review input** is the batched patch content. The **file list** is used for stack detection.
 
 ### SCOPE mode
 
@@ -129,8 +147,8 @@ After resolving all targets:
 4. **Find direct dependencies** of all resolved files:
    - Parse import/require statements in the resolved files
    - For each import that points to a local file (not a library), add that file to a **context files** list
-   - Cap context files at 30 to avoid scope explosion
-5. The **review input** is the full content of all resolved files (read them). The **context files** are provided to agents as read-only background.
+   - Cap context files at 15 files or 2,000 lines to avoid scope explosion
+5. The **review input** is resolved files read in token-aware batches. If a target resolves to more than 40 source files, decompose it like FULL mode and label each section. The **context files** are provided to agents as read-only background.
 6. The **file list** is the resolved files (not including context files) — used for stack detection.
 7. If multiple targets were provided, group files by their scope label for the report output. Each scope label becomes a section heading in the report.
 
@@ -139,7 +157,7 @@ After resolving all targets:
 1. Build the project file tree using `ls` and Glob to find all source files, excluding: `node_modules/`, `.git/`, `build/`, `target/`, `dist/`, `*.lock`, `*.min.*`
 2. **Decompose into sections** following these rules:
    - Each section maps to a single logical concern (do not mix orchestration with persistence)
-   - No section should contain more than 15-20 files — split further if needed
+   - No section should contain more than 15 files or 3,000 source lines — split further if needed
    - Group by: package/module boundaries first, then by architectural layer
    - Identify cross-cutting concerns (security, logging, error handling) as their own section
 3. For each section, record:
@@ -149,8 +167,8 @@ After resolving all targets:
    - **focus**: What the reviewer should pay attention to
    - **priority**: `high` (core business logic, security), `medium` (services, integrations), `low` (config, utilities)
 4. Order sections so foundational layers are reviewed before dependent layers.
-5. If `--plan` flag is set, write decomposition files to `plans/greenharbor-code-review/` (see Step 2a below).
-6. The **review input** is the set of sections. Each section is reviewed independently by a sub-agent.
+5. If `--plan` flag is set, write decomposition files to `plans/greenharbor-code-review/` (see Step 3a below).
+6. The **review input** is the set of bounded sections. Each section is reviewed independently by a sub-agent.
 7. The **file list** is all source files — used for stack detection.
 
 ### FLOW mode
@@ -168,10 +186,10 @@ After resolving all targets:
    - Collect DTOs/models/entities referenced in the chain
    - Collect configuration (security rules, transaction config) that governs the endpoint
 5. Build the **flow chain** as an ordered list: Controller → Service(s) → Repository/Client(s) → Entities/DTOs → Config
-6. The **review input** is the full content of all files in the flow chain, presented in call-chain order.
+6. The **review input** is files in the flow chain, presented in call-chain order and capped at 20 source files or 4,000 lines per batch. If the chain exceeds the cap, review controller/service/repository layers separately and synthesize.
 7. The **file list** is all files in the chain — used for stack detection.
 
-### Step 2a: Write plan files (FULL mode + `--plan` only)
+### Step 3a: Write plan files (FULL mode + `--plan` only)
 
 If `--plan` was passed with `--full`, write decomposition plan files:
 
@@ -186,9 +204,9 @@ If `--plan` was passed with `--full`, write decomposition plan files:
 
 ---
 
-## Step 3: Detect tech stack
+## Step 4: Detect tech stack
 
-Using the **file list** from Step 2, classify into stacks and flags:
+Using the **file list** from Step 3, classify into stacks and flags:
 
 ### Stack detection
 - **`java`**: any file matching `*.java`, `*.gradle`, `pom.xml`, or `*.properties`/`*.yml` under a `src/` directory
@@ -204,7 +222,7 @@ Record which stacks and flags were detected. Multiple stacks can be active simul
 
 ---
 
-## Step 4: Read checklists
+## Step 5: Read checklists
 
 Always read `~/.claude/skills/greenharbor-code-review/checklist-universal.md`.
 
@@ -218,7 +236,7 @@ Additionally, Glob for `~/.claude/skills/greenharbor-code-review/checklist-*.md`
 
 ---
 
-## Step 5: Dispatch reviewer agents
+## Step 6: Dispatch reviewer agents
 
 Based on mode and detected stacks, launch specialized reviewer agents **in parallel** using the Agent tool.
 
@@ -248,8 +266,8 @@ Where SEVERITY is one of: CRITICAL, HIGH, MEDIUM, LOW
 
 Skip preamble, summaries, and "looks good" comments. Only flag real problems.
 
-Diff:
-<full diff content>
+Diff batch:
+<bounded patch content for this batch>
 ```
 
 ### SCOPE mode — agent dispatch
@@ -285,12 +303,12 @@ Context files (read-only, for understanding dependencies — do NOT review these
 <list context file paths>
 
 Files to review:
-<for each file, include its full content with file path header>
+<bounded source batch with file path headers>
 ```
 
 ### FULL mode — agent dispatch
 
-For each section from Step 2, launch a reviewer agent **in parallel** (up to 6 concurrent agents; queue the rest):
+For each section from Step 3, launch a reviewer agent **in parallel** (up to 6 concurrent agents; queue the rest):
 
 **Agent prompt for FULL mode (per section):**
 ```
@@ -315,7 +333,7 @@ Where SEVERITY is one of: CRITICAL, HIGH, MEDIUM, LOW
 Skip preamble, summaries, and "looks good" comments. Only flag real problems.
 
 Files to review:
-<for each file in section, include its full content with file path header>
+<bounded section source with file path headers>
 ```
 
 After all section agents complete, launch one additional **synthesis agent**:
@@ -368,7 +386,7 @@ Files: <comma-separated list of files the fix would touch>
 Where SEVERITY is one of: CRITICAL, HIGH, MEDIUM, LOW
 
 Flow files (in call-chain order):
-<for each file in the chain, include its full content with file path header and layer label>
+<bounded flow source with file path headers and layer labels>
 ```
 
 Additionally, launch specialized agents based on detected flags (same pattern as DIFF mode), providing the flow files as review input:
@@ -379,13 +397,13 @@ Launch all flag-based agents **in parallel** with the deep-review agent.
 
 ---
 
-## Step 6: Checklist review
+## Step 7: Checklist review
 
 How checklist review runs depends on the mode:
 
 ### DIFF, SCOPE, and FLOW modes
 
-Launch a **checklist review agent** in parallel with the Step 5 reviewer agents (include it in the same Agent tool-use turn). This ensures checklist review runs concurrently with specialized agent reviews.
+Launch a **checklist review agent** in parallel with the Step 6 reviewer agents (include it in the same Agent tool-use turn). This ensures checklist review runs concurrently with specialized agent reviews.
 
 **Agent prompt for checklist review:**
 ```
@@ -408,7 +426,7 @@ Where SEVERITY is one of: CRITICAL, HIGH, MEDIUM, LOW
 Skip preamble, summaries, and "looks good" comments. Only flag real problems.
 
 Checklists:
-<paste full content of all loaded checklist files>
+<loaded checklist criteria>
 
 Code to review:
 <review input: diff content, file content, or section content depending on mode>
@@ -418,13 +436,13 @@ Use the `general-purpose` agent type (not a specialized reviewer) and set the mo
 
 ### FULL mode
 
-Do NOT launch a standalone checklist agent — the review input (all project source files) is too large for a single agent. Instead, append the checklist criteria to each section agent's prompt from Step 5. Add this block to the end of each section agent prompt:
+Do NOT launch a standalone checklist agent — the review input (all project source files) is too large for a single agent. Instead, append the checklist criteria to each section agent's prompt from Step 6. Add this block to the end of each section agent prompt:
 
 ```
 Additionally, apply the following review checklists against the files in this section:
 <if --critical-only flag is set, include: "Apply only the CRITICAL checks. Skip INFORMATIONAL.">
 
-<paste full content of all loaded checklist files>
+<loaded checklist criteria>
 
 Follow the suppressions from each checklist — do NOT flag suppressed items.
 Include checklist findings in the same output format as above.
@@ -434,11 +452,11 @@ This distributes checklist review across section agents, keeping each agent's in
 
 ---
 
-## Step 7: Merge, classify, and output
+## Step 8: Merge, classify, and output
 
 After all agents complete and checklist review finishes:
 
-### 7a. Deduplicate and map severity
+### 8a. Deduplicate and map severity
 
 1. **Deduplicate**: If an agent finding and a checklist finding refer to the same issue at the same location, keep the more specific one. If two agents flag the same issue, merge into one finding.
 2. **Map severity**: Agent findings map as follows:
@@ -446,7 +464,7 @@ After all agents complete and checklist review finishes:
    - Agent `MEDIUM` or `LOW` → `INFORMATIONAL`
 3. If `--critical-only`, drop all INFORMATIONAL findings.
 
-### 7b. Classify each finding by resolution path
+### 8b. Classify each finding by resolution path
 
 For every finding, determine the appropriate resolution path. This is the most important part of the report — it tells the user exactly which workflow to kick off next.
 
@@ -468,7 +486,7 @@ A finding is **IMPL** (`/greenharbor-orchestrate`) if ALL of these apply:
 
 When in doubt, classify as DESIGN. It's better to plan first than to start coding without understanding the full picture.
 
-### 7c. Group findings into parallel waves
+### 8c. Group findings into parallel waves
 
 Before building the report, group findings into **waves** — sets of tasks that can be safely worked on in parallel because they touch different files.
 
@@ -492,7 +510,7 @@ Before building the report, group findings into **waves** — sets of tasks that
 
 **Important:** The wave grouping is an optimization hint, not a hard constraint. If a finding's file footprint is ambiguous (e.g., "multiple files" with no specifics), be conservative and put it in its own wave.
 
-### 7d. Build the report
+### 8d. Build the report
 
 **Build the report header** based on mode:
 - DIFF mode: `Diff Review (<baseline>): N issues (X critical, Y informational)`
@@ -501,208 +519,61 @@ Before building the report, group findings into **waves** — sets of tasks that
 - FULL mode: `Full Project Review: N issues (X critical, Y informational) across M sections`
 - FLOW mode: `Flow Review (<method> <path>): N issues (X critical, Y informational)`
 
-**Output in the following format.** Findings are grouped first by resolution path (DESIGN vs IMPL), then by scope label (in SCOPE mode with multiple targets or FULL mode), then by severity. Each finding includes a one-line suggested command the user can copy-paste to kick off the work:
+**Output in the following format.** Findings are grouped first by resolution path (DESIGN vs IMPL), then by scope label or section when relevant, then by severity. Each finding includes a one-line suggested command the user can copy-paste to kick off the work:
 
 ```
 <Report Header>
 
----
-
-## DESIGN — needs `/greenharbor-plan-work` before implementation
-
-These items need architectural thinking, trade-off analysis, or multi-file design before code is written.
-
+## DESIGN — needs `/greenharbor-plan-work`
 ### CRITICAL
-
-- **D1.** [file:line] Problem description
-  Why design needed: <one line explaining why this can't be fixed surgically>
-  Files: <list of files this fix touches>
-
-- **D2.** [file:line] Problem description
+- **D1.** [file:line] Problem
   Why design needed: <one line>
   Files: <list of files>
-
 ### INFORMATIONAL
-
-- **D3.** [file:line] Problem description
+- **D2.** [file:line] Problem
   Why design needed: <one line>
   Files: <list of files>
-
----
 
 ## IMPL — ready for `/greenharbor-orchestrate`
-
-These items are surgical, well-defined fixes that can go straight to implementation.
-
 ### CRITICAL
-
-- **I1.** [file:line] Problem description
-  Fix: <specific fix description>
-  Files: <list of files this fix touches>
-
-- **I2.** [file:line] Problem description
-  Fix: <specific fix description>
+- **I1.** [file:line] Problem
+  Fix: <specific fix>
   Files: <list of files>
-
 ### INFORMATIONAL
-
-- **I3.** [file:line] Problem description
-  Fix: <specific fix description>
+- **I2.** [file:line] Problem
+  Fix: <specific fix>
   Files: <list of files>
-
----
 
 ## Summary
-
 | Category | Critical | Informational | Total |
-|----------|----------|---------------|-------|
-| DESIGN   | X        | X             | X     |
-| IMPL     | X        | X             | X     |
-| **Total**| **X**    | **X**         | **X** |
+|---|---:|---:|---:|
+| DESIGN | X | X | X |
+| IMPL | X | X | X |
+| Total | X | X | X |
 
-### Action Playbook
-
-Copy-paste commands grouped into **waves** of work that can be run in parallel. Tasks within a wave touch different files and are safe to run concurrently. Complete all tasks in a wave before starting the next.
-
-**Grouping rules:** Within each wave, consolidate related findings into meaningful workloads rather than issuing one command per finding. Group IMPL findings that share a theme or module into a single `/greenharbor-orchestrate` command targeting a wave in the IMPL mini-plan. Group related DESIGN findings into a single `/greenharbor-plan-work` command with the report path. Each command must include the relevant file path so it can be actioned in a separate session.
-
-#### Wave 1 — <N> parallel tasks
-```bash
-# D1. <grouped design theme>  [Files: FileA.java]
-/greenharbor-plan-work "<Design description covering D1>" --review {REPORT_PATH}
-
-# I1+I2. <grouped impl theme>  [Files: FileC.java, FileD.java, FileE.java]
-/greenharbor-orchestrate {IMPL_PLAN_PATH} --scope "Wave 1"
+## Action Playbook
+Group commands by parallel-safe wave. Use `/greenharbor-plan-work "<description>" --review {REPORT_PATH}` for DESIGN and `/greenharbor-orchestrate {IMPL_PLAN_PATH} --scope "Wave N"` for IMPL.
 ```
 
-#### Wave 2 — <N> parallel tasks
-```bash
-# D2. <design theme>  [Files: FileA.java, FileB.java]
-/greenharbor-plan-work "<Design description covering D2>" --review {REPORT_PATH}
+Mode additions: SCOPE prefixes findings with the scope label; FULL prefixes findings with the section; FLOW adds `Flow chain: Controller → Service → Repository/Client → Entity/DTO → Config` before findings.
 
-# I3. <impl theme>  [Files: FileF.java]
-/greenharbor-orchestrate {IMPL_PLAN_PATH} --scope "Wave 2"
-```
-
-#### Wave 3 — solo (unbounded scope)
-```bash
-# D3. <cross-cutting design theme>  [Files: cross-cutting]
-/greenharbor-plan-work "<Design description covering D3>" --review {REPORT_PATH}
-```
-
-Where:
-- `{REPORT_PATH}` is the path to this review report (e.g., `reports/greenharbor-code-review-scope-OrderService-2026-03-15.md`)
-- `{IMPL_PLAN_PATH}` is the path to the IMPL mini-plan (e.g., `reports/greenharbor-code-review-impl-plan-2026-03-15.md`) — see Step 7f
-
-**Branch propagation:** If `--branch` or `--baseline` was set to a non-default value (i.e., not `origin/main`), append `--branch <ref>` to every `/greenharbor-plan-work` and `/greenharbor-orchestrate` command in the playbook. This ensures downstream skills diff against the same baseline used during review. Note: strip the `origin/` prefix when propagating — review diffs against `origin/<ref>` (remote-tracking), but greenharbor-plan-work and greenharbor-orchestrate diff against local refs (e.g., pass `--branch develop`, not `--branch origin/develop`).
-```
-
-For **SCOPE mode** (single target), prefix findings with the scope label:
-
-```
-Scope Review [l402-auth]: 5 issues (2 critical, 3 informational)
-
----
-
-## DESIGN — needs `/greenharbor-plan-work` before implementation
-
-### l402-auth
-
-- **D1.** [l402-auth/src/.../MacaroonService.java:89] ...
-  Why design needed: ...
-
----
-
-## IMPL — ready for `/greenharbor-orchestrate`
-
-### l402-auth
-
-- **I1.** [l402-auth/src/.../MacaroonCrypto.java:45] ...
-  Fix: ...
-```
-
-For **SCOPE mode** (multiple targets), group findings by scope label within each resolution path:
-
-```
-Scope Review [l402-auth, l402-payment]: 8 issues (3 critical, 5 informational)
-
----
-
-## DESIGN — needs `/greenharbor-plan-work` before implementation
-
-### l402-auth
-- **D1.** [l402-auth/src/.../MacaroonService.java:89] ...
-
-### l402-payment
-- **D2.** [l402-payment/src/.../InvoiceService.java:112] ...
-
----
-
-## IMPL — ready for `/greenharbor-orchestrate`
-
-### l402-auth
-- **I1.** [l402-auth/src/.../MacaroonCrypto.java:45] ...
-
-### l402-payment
-- **I2.** [l402-payment/src/.../PaymentRepository.java:33] ...
-```
-
-For **FULL mode**, use section grouping within each resolution path:
-
-```
-## DESIGN — needs `/greenharbor-plan-work` before implementation
-
-### Section: Security Configuration (priority: high)
-- **D1.** [SecurityConfig.java:45] ...
-
-### Section: Order Service Layer (priority: high)
-- **D2.** [OrderService.java:112] ...
-
-### Cross-Cutting
-- **D3.** [multiple files] ...
-
----
-
-## IMPL — ready for `/greenharbor-orchestrate`
-
-### Section: Order Service Layer (priority: high)
-- **I1.** [OrderRepository.java:33] ...
-
-### Section: Payment Integration (priority: medium)
-- **I2.** [PaymentClient.java:78] ...
-```
-
-For **FLOW mode**, add the flow chain summary at the top:
-
-```
-Flow Review (POST /api/orders): N issues
-
-**Flow chain:** OrderController → OrderService → OrderRepository → Order (entity) → SecurityConfig
-
-**Structural follow-up:** For class-design analysis (unused dependencies, constructor bloat) on files in this chain, run:
-`/greenharbor-code-review --scope <ServiceClass>` for each service in the chain.
-
----
-
-## DESIGN — needs `/greenharbor-plan-work` ...
-## IMPL — ready for `/greenharbor-orchestrate` ...
-```
+Branch propagation: if `--branch` or non-default `--baseline` was set, append `--branch <ref>` to playbook commands. Strip an `origin/` prefix when propagating.
 
 If no issues found: `<Report Header>: No issues found.`
 
-### 7e. Write report
+### 8e. Write report
 
 **Always write to file** in SCOPE, FULL, and FLOW modes. Use `--out` path if specified, otherwise auto-generate at `reports/greenharbor-code-review-<mode>-<YYYY-MM-DD>.md` (for SCOPE mode with a single target, use `reports/greenharbor-code-review-scope-<scope-label>-<YYYY-MM-DD>.md` so the filename reflects the module). Create the `reports/` directory if needed.
 
-In DIFF mode, only write to file if `--out` was explicitly specified.
+In DIFF mode, write to file when `--out` is specified or when an IMPL mini-plan will be generated. If DIFF mode needs an implicit report path, use `reports/greenharbor-code-review-diff-<YYYY-MM-DD>.md`.
 
 Output to stdout regardless of mode.
 
-### 7f. Write IMPL mini-plan (if IMPL findings exist)
+### 8f. Write IMPL mini-plan
 
-**Skip this step if there are no IMPL findings.**
+By default, generate an IMPL mini-plan only when CRITICAL IMPL findings exist. Generate a mini-plan for INFORMATIONAL-only IMPL findings only if `--out` is specified. Skip this step if there are no qualifying IMPL findings.
 
-When IMPL findings exist, generate an orchestrate-ready plan file that restructures the IMPL findings from the report into the `## Wave N:` / `### W{N}-{NN}:` format that greenharbor-orchestrate parses via Rule A. This separates concerns: the review report stays human-optimized (bullet format, scannable), while the mini-plan is machine-optimized for greenharbor-orchestrate.
+When qualifying IMPL findings exist, generate an orchestrate-ready plan file that restructures the IMPL findings from the report into the `## Wave N:` / `### W{N}-{NN}:` format that greenharbor-orchestrate parses via Rule A. This separates concerns: the review report stays human-optimized (bullet format, scannable), while the mini-plan is machine-optimized for greenharbor-orchestrate.
 
 **Output path:** `reports/greenharbor-code-review-impl-plan-<YYYY-MM-DD>.md` (or `reports/greenharbor-code-review-impl-plan-<scope-label>-<YYYY-MM-DD>.md` in SCOPE mode). Create the `reports/` directory if needed.
 
@@ -755,7 +626,7 @@ After writing, print: `IMPL plan written to: <path> (<N> work units across <M> w
 
 ---
 
-## Step 8: Handle critical issues (DIFF mode only)
+## Step 9: Handle critical issues (DIFF mode only)
 
 **This step only applies in DIFF mode.** In SCOPE, FULL, and FLOW modes the report is the deliverable — skip this step entirely. The user will address findings from the written report in a separate session.
 
@@ -765,7 +636,7 @@ If `--fix` flag is set:
 - After all fixes are applied, output a summary of what was changed.
 - Do NOT commit, push, or create PRs.
 
-If `--fix` is NOT set:
+If `--interactive` is set and `--fix` is NOT set:
 - For EACH critical **IMPL** finding, use a separate `AskUserQuestion` with:
   - The problem and recommended fix
   - Options: **A: Fix it now**, **B: Acknowledge**, **C: False positive — skip**
@@ -776,12 +647,16 @@ If `--fix` is NOT set:
 - If the user chose A on any IMPL issue, apply the recommended fixes.
 - If the user chose A on any DESIGN issue, output the ready-to-run `/greenharbor-plan-work` command (including `--review {REPORT_PATH}` if a report was written, and `--branch <ref>` if a non-default baseline was used) so the user can invoke it in their next prompt. Do NOT attempt to invoke `/greenharbor-plan-work` directly — the review skill should remain read-only.
 
+Default behavior when neither `--fix` nor `--interactive` is set:
+- Report-only. Do not prompt or modify files.
+
 ---
 
 ## Important Rules
 
 - **Read the FULL input before commenting.** Do not flag issues already addressed in the code.
-- **Read-only by default.** Only modify files if the user explicitly chooses "Fix it now" or passes `--fix`. Never commit, push, or create PRs.
+- **Read-only by default.** Only modify files if `--fix` is set or the user chooses "Fix it now" in `--interactive` mode. Never commit, push, or create PRs.
+- **Stay token-aware.** Prefer metadata, targeted patches, batching, and terse notes over loading whole projects or full diffs.
 - **Be terse.** One line problem, one line fix. No preamble.
 - **Only flag real problems.** Skip anything that's fine.
 - **Respect scope.** In SCOPE mode, only flag issues in the resolved files, not in context files. In FLOW mode, only flag issues relevant to the traced flow.

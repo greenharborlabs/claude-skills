@@ -3,6 +3,9 @@
 !.gitignore
 !agents/
 !skills/
+!shared/
+!shared/greenharbor-*/
+!shared/greenharbor-*/**
 !codex/
 codex/*
 !codex/skills/
