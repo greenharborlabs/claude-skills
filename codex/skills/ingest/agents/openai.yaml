@@ -1,7 +1,0 @@
-interface:
-  display_name: "Ingest"
-  short_description: "Turn documents and URLs into vault notes"
-  default_prompt: "Use $ingest to ingest this document"
-
-policy:
-  allow_implicit_invocation: true

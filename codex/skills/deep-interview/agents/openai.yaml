@@ -1,7 +1,0 @@
-interface:
-  display_name: "Deep Interview"
-  short_description: "Interview deeply and write a specification"
-  default_prompt: "Use $deep-interview to interview me about this feature"
-
-policy:
-  allow_implicit_invocation: true

@@ -1,7 +1,0 @@
-interface:
-  display_name: "Review Decompose"
-  short_description: "Split a repo into focused review sections"
-  default_prompt: "Use $review-decompose to create a review plan"
-
-policy:
-  allow_implicit_invocation: true
