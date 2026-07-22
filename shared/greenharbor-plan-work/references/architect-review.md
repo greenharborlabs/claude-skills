@@ -19,7 +19,13 @@ not merely because the repo is a monorepo.
 
 ## Primary Architect Prompt
 
+If the exact resolved architect name is available as a Codex skill, insert
+`Use $<resolved-architect-name> for this plan review.` as the first prompt line.
+Otherwise omit the directive and use the self-contained prompt. Never emit an
+unresolved placeholder.
+
 ```text
+<optional Architect skill directive; omit when unavailable>
 You are reviewing an implementation plan for quality, completeness, and correctness.
 Your review is independent. Approach it with fresh eyes.
 

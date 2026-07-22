@@ -2,6 +2,14 @@
 
 Load this before constructing Coder, Reviewer, Architect, or docs prompts.
 
+## Optional Codex Skill Overlay
+
+Before constructing a role prompt, check whether the exact resolved role name is
+available as a Codex skill. If it is, insert `Use $<resolved-role-name> for this
+task.` as the first line. If it is not, omit the directive and rely on the
+self-contained prompt below. Never emit an unresolved placeholder or invent a
+skill name.
+
 ## Batch Exploration
 
 Before each batch:
@@ -42,6 +50,8 @@ Use an explicit `ACTIVE_AGENTS` set for every wave.
 ## Coder Prompt
 
 ```text
+<optional Coder skill directive; omit when unavailable>
+
 ## Task
 <imperative work group title>
 
@@ -92,15 +102,20 @@ NOTES: <unusual context>
 
 ## Stack Warnings
 
-Java: transaction boundaries around external calls, lazy loops without fetch,
-native query string concatenation, missing `@Valid`, authorization on user IDs,
-overlong/deeply nested methods.
+Java: transaction boundaries around external calls, demonstrated lazy-load query
+loops, unsafe dynamic queries, boundary validation or authorization gaps,
+unbounded work, and compatibility with the configured Java/Spring versions.
 
 React: missing effect cleanup, unsafe HTML without sanitization, async effects
 without cancellation.
 
 Python: mutable defaults, swallowed broad exceptions, shell injection, missing
 await, file handles without context managers.
+
+Rust: panics on untrusted paths, unnecessary clones masking ownership issues,
+blocking work or locks across `.await`, unbounded tasks/channels, missing
+cancellation or timeouts, unsafe/FFI invariants, incompatible public API or
+serde changes, and unreviewed Cargo features/build scripts/dependencies.
 
 NanoClaw/OpenClaw: missing risk gates, hardcoded secrets, broker retry/timeout,
 state persistence/reconciliation, rate limiting, circuit breakers.
@@ -111,6 +126,8 @@ input in sensitive operations.
 ## Reviewer Prompt
 
 ```text
+<optional Reviewer skill directive; omit when unavailable>
+
 ## Review task
 Review implementation against the spec.
 
@@ -163,6 +180,8 @@ SUMMARY:
 Use only when Reviewer sets `COMPLEX_ISSUES: YES`.
 
 ```text
+<optional Architect skill directive; omit when unavailable>
+
 ## Architect task
 Produce a targeted fix plan for a complex review failure.
 

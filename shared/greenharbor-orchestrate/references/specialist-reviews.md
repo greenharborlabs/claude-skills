@@ -13,6 +13,7 @@ Skip if no specialist reviewers were resolved. For Java stacks:
   OpenAPI files.
 
 For Python, use the same risk-flag and file-trigger rules from stack detection.
+For Rust, use the same risk-flag and file-trigger rules from stack detection.
 For React/TypeScript, run `greenharbor-frontend-reviewer` as a focused specialist when
 `security`, `public-api`, `performance`, or `concurrency` risk is `yes`.
 
@@ -30,7 +31,12 @@ If diff is >500 lines, focus each specialist on domain-relevant files.
 
 ## Specialist Prompt
 
+If the exact resolved specialist name is available as a Codex skill, insert
+`Use $<resolved-specialist-name> for this audit.` as the first prompt line.
+Otherwise omit the directive. Never emit a placeholder or nonexistent skill.
+
 ```text
+<optional specialist skill directive; omit when unavailable>
 ## Post-Implementation Audit
 Review ALL changes from this orchestration run.
 
