@@ -1,6 +1,5 @@
 ---
 name: greenharbor-plan-work
-version: 1.6.0
 description: |
   Token-lean, battle-tested plan creator. Produces orchestrate-ready plan files
   with bounded codebase exploration, optional requirements discovery, independent

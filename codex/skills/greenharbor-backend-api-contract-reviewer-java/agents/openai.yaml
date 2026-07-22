@@ -1,0 +1,7 @@
+interface:
+  display_name: "Java API Contract Reviewer"
+  short_description: "Review Java API compatibility and contracts"
+  default_prompt: "Use $greenharbor-backend-api-contract-reviewer-java to review this API contract."
+
+policy:
+  allow_implicit_invocation: true

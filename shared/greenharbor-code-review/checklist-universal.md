@@ -40,37 +40,33 @@ Only flag real problems with specific `file:line` evidence. Skip anything that i
 - Empty `catch`, `then`, or `finally` blocks that silently swallow errors
 
 #### Complexity
-- Methods/functions exceeding ~20 lines — candidates for extraction
-- Cyclomatic complexity: methods with more than 4-5 branching paths — extract helper methods or use early returns
-- Cognitive complexity: deeply nested logic (3+ levels) — flatten with guard clauses or extract inner blocks
-- Multi-break/multi-continue loops — extract to method with early returns or use streams
-- Nested loops — extract inner loop to named methods
-- God methods: single methods doing more than one conceptual thing — split into focused methods
-- Long parameter lists (5+ parameters) — consider a parameter object or builder
+- Methods/functions whose mixed responsibilities or cognitive load demonstrably obscure behavior
+- Branching or nesting that makes reachable states difficult to reason about or test
+- Loops with control flow that hides termination, skips required work, or creates a credible correctness/performance risk
+- Classes or methods combining unrelated responsibilities with a concrete maintenance or testability cost
+- Parameter lists that repeatedly cause call-site mistakes or expose a missing domain concept
 
 #### Duplication
-- Repeated code blocks (3+ lines) in multiple places — extract to shared method
-- Copy-paste patterns differing in one variable — parameterize
-- Repeated string literals as identifiers — extract to constants
-- Similar switch/if-else chains — consider polymorphism or strategy map
+- Repeated behavior that is already drifting or creates a credible multi-site maintenance risk
+- Copy-paste variants whose differences are accidental or hard to keep consistent
+- Repeated identifiers whose coupling is semantic rather than merely textual
+- Similar branch structures only when a shared policy or abstraction would reduce real inconsistency
 
 #### Naming & Readability
-- Boolean variables without question-word prefixes (`is`, `has`, `should`, `can`)
-- Abbreviated or single-letter variable names outside trivial loop indices
-- Methods whose names don't describe what they do
-- Inconsistent naming conventions within the same file/package
+- Names that materially misrepresent behavior, units, ownership, or lifecycle
+- Abbreviations or short names that make non-local code meaningfully harder to understand
+- Inconsistency that can cause incorrect usage or contract confusion; omit preference-only naming comments
 
 #### Method & Class Structure
-- Classes with too many responsibilities — candidate for splitting
-- Utility classes as dumping grounds for unrelated static methods
-- Methods mixing different abstraction levels
-- Feature envy: methods primarily operating on another class's data
+- Classes with multiple unrelated responsibilities and a demonstrated reason to change independently
+- Utility classes accumulating unrelated behavior with unclear ownership
+- Mixed abstraction levels or misplaced behavior only when they obscure the flow or deepen coupling
 
 #### Error Handling Hygiene
 - Empty catch blocks silently swallowing exceptions
 - Catching overly broad exception types when specific types are appropriate
 - Logging an exception and then re-throwing it (double logging)
-- Returning `null` where failure should throw or return Optional/Result
+- Returning `null` when it violates the established contract or creates an unchecked failure path
 - Missing try-with-resources for closeable resources
 - Logging only `e.getMessage()` instead of the full exception
 
@@ -82,7 +78,7 @@ Only flag real problems with specific `file:line` evidence. Skip anything that i
 - Test methods testing multiple unrelated behaviors
 
 #### Magic Numbers & String Coupling
-- Bare numeric literals without named constants
+- Unexplained literals whose meaning, unit, or policy is unclear and reused or safety-relevant
 - Error message strings matched elsewhere as query filters
 - Hardcoded URLs, ports, or hostnames that should be configuration
 

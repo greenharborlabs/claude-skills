@@ -24,15 +24,15 @@ Only flag real problems with specific `file:line` evidence. Skip anything that i
 - `EntityManager.createNativeQuery()` with string interpolation
 
 #### Input Validation
-- Missing `@Valid` or `@Validated` on `@RequestBody` / `@RequestParam` at controller boundaries
-- Missing `@NotNull` / `@NotBlank` on DTO fields that must not be null
+- Declared request constraints that never execute and have no equivalent boundary validation
+- Required or bounded input accepted without annotation-based or equivalent programmatic validation
 
 #### Broken Object-Level Authorization (BOLA)
 - User-supplied IDs used to fetch records without ownership/authorization check
 - Missing `@PreAuthorize` or manual authorization on endpoints modifying user-specific data
 
 #### Missing Authorization
-- Controller endpoints without any authorization annotation or programmatic check
+- Sensitive endpoints without effective filter-chain, annotation, or programmatic authorization
 - New endpoints not covered by `SecurityFilterChain` rules
 
 ### Pass 2 — INFORMATIONAL
@@ -47,18 +47,18 @@ Only flag real problems with specific `file:line` evidence. Skip anything that i
 
 #### HTTP Client Resilience
 - `RestTemplate` / `WebClient` calls without explicit timeouts
-- Missing retry or circuit breaker on external service calls
+- Missing failure handling where operation semantics and observed dependency risk require it; do not demand retries or circuit breakers universally
 
 #### Pagination
 - Repository methods returning `List<Entity>` for unbounded result sets — use `Page` or `Slice`
 - Missing default/max page size limits
 
 #### Virtual Thread Compatibility
-- `synchronized` blocks in code that may run on Virtual Threads
-- Thread-local storage assumptions in Virtual Thread context
+- On JDK 23 or earlier, blocking inside `synchronized` may pin virtual threads; JDK 24+ eliminated ordinary monitor pinning
+- Remaining native-frame pinning, unsafe thread-local assumptions, or unbounded virtual-thread work when virtual threads are actually enabled
 
 #### Error Handling
-- Missing `@ControllerAdvice` / `@ExceptionHandler` for custom exception types
+- Unhandled or inconsistent observable error contracts; `@ControllerAdvice` is one option, not a requirement
 - Catching generic `Exception` instead of specific types
 
 #### Code Quality — Java-Specific
@@ -78,17 +78,14 @@ Only flag real problems with specific `file:line` evidence. Skip anything that i
 - Constructor parameters derivable from already-injected config — derive instead
 
 **Complexity & Structure:**
-- Methods exceeding ~20 lines
-- `if`/`else` chains with 4+ branches — consider switch/pattern matching/strategy
-- Nested if depth > 3 — flatten with guard clauses
-- Classes with 10+ methods or 300+ lines
-- `switch` without `default` (unless exhaustive sealed type)
+- Methods, branches, or nesting whose demonstrated cognitive load or mixed responsibilities obscure behavior
+- Classes with multiple unrelated responsibilities or changes that materially deepen coupling
+- Non-exhaustive `switch` logic that misses a reachable case; do not require `default` for compiler-checked exhaustive switches
 
-**Modern Java (Java 17+):**
-- Mutable DTOs that could be records
-- `instanceof` chains → pattern matching
-- Sealed interface opportunities
-- Text blocks for multiline strings
+**Modern Java (only when supported and materially clearer):**
+- Mutable value/transport types that would become safer and simpler as records
+- Type branches or closed hierarchies where pattern matching or sealed types reduce real complexity
+- Text blocks that improve genuinely multiline strings
 - `Optional.get()` without `.isPresent()` check
 - `.stream().collect(Collectors.toList())` → `.stream().toList()`
 

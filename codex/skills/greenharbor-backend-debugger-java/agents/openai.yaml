@@ -1,0 +1,7 @@
+interface:
+  display_name: "Java Backend Debugger"
+  short_description: "Diagnose Java and Spring failures"
+  default_prompt: "Use $greenharbor-backend-debugger-java to diagnose this Java or Spring failure."
+
+policy:
+  allow_implicit_invocation: true

@@ -1,0 +1,7 @@
+interface:
+  display_name: "Java Backend Coder"
+  short_description: "Implement focused Java and Spring changes"
+  default_prompt: "Use $greenharbor-backend-coder-java to implement this Java or Spring change."
+
+policy:
+  allow_implicit_invocation: true

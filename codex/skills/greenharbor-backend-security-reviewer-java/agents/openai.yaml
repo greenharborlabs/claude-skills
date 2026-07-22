@@ -1,0 +1,7 @@
+interface:
+  display_name: "Java Security Reviewer"
+  short_description: "Audit Java and Spring security risks"
+  default_prompt: "Use $greenharbor-backend-security-reviewer-java to review this Java or Spring security surface."
+
+policy:
+  allow_implicit_invocation: true

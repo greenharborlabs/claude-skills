@@ -1,0 +1,7 @@
+interface:
+  display_name: "Java Backend Reviewer"
+  short_description: "Review Java and Spring production risks"
+  default_prompt: "Use $greenharbor-backend-reviewer-java to review these Java or Spring changes."
+
+policy:
+  allow_implicit_invocation: true

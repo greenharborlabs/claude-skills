@@ -1,0 +1,7 @@
+interface:
+  display_name: "Java Backend Architect"
+  short_description: "Design Java and Spring implementation plans"
+  default_prompt: "Use $greenharbor-backend-planning-architect to design this Java or Spring change."
+
+policy:
+  allow_implicit_invocation: true
