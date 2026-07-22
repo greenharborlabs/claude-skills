@@ -4,7 +4,7 @@ description: |
   Universal code review with multiple modes: diff-based (default), full-project,
   scoped (package/service/directory), and endpoint-flow tracing. Detects tech stack,
   applies specialized review checklists, merges and deduplicates findings. Supports
-  Java/Spring and React/TS stacks. Use when user wants a deep code review, says
+  Java/Spring, Rust, and React/TS stacks. Use when user wants a deep code review, says
   "greenharbor-code-review", wants a pre-landing check, or needs production-readiness assessment.
   Modes: /greenharbor-code-review (diff), /greenharbor-code-review --scope src/billing/ (scoped),
   /greenharbor-code-review --full (full project), /greenharbor-code-review --flow "POST /api/orders" (endpoint trace).
@@ -133,6 +133,7 @@ Using the file list, classify:
 
 ### Stack detection
 - **`java`**: `*.java`, `*.gradle`, `pom.xml`, or `*.properties`/`*.yml` under `src/`
+- **`rust`**: `Cargo.toml` with `*.rs` source files, including workspace members
 - **`react`**: `*.tsx`, `*.ts`, `*.jsx` with React patterns (imports, components, hooks)
 
 ### Flag detection
@@ -140,6 +141,13 @@ Using the file list, classify:
 - **`performance`**: `@Repository`, `@Cacheable`, `RestTemplate`, `WebClient`, `@Transactional`, `@Query`, `@Async`, `cache`
 - **`concurrency`**: `synchronized`, `ReentrantLock`, `Atomic*`, `CompletableFuture`, `@Async`, `@Scheduled`, `ExecutorService`, `ConcurrentHashMap`, `volatile`, `virtual.enabled`
 - **`api-contract`**: `@RestController`, `@*Mapping`, `@RequestBody`, `@PathVariable`, `@ControllerAdvice`, `@ExceptionHandler`, `Pageable`, `@JsonProperty`
+
+For Rust, also set `security` for auth/secret/token/crypto, `unsafe`, `extern`,
+FFI, `build.rs`, process/filesystem/outbound HTTP, or registry/source changes;
+set `performance` for blocking I/O, allocation-heavy, database, or cache paths;
+set `concurrency` for async tasks, channels, locks, atomics, cancellation, or
+shutdown; and set `api-contract` for public `pub` items, crate exports, serde,
+routes, OpenAPI, CLI arguments/output, FFI, features, or MSRV changes.
 
 ---
 
@@ -149,6 +157,7 @@ Always load `./references/checklist-universal.md`.
 
 Then load stack-specific checklists:
 - If `java` detected -> also load `./references/checklist-java-spring.md`
+- If `rust` detected -> also load `./references/checklist-rust.md`
 - If `react` detected -> also load `./references/checklist-react-ts.md`
 
 **If `checklist-universal.md` cannot be loaded, STOP and report the error.**

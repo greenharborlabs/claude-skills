@@ -3,12 +3,12 @@ name: greenharbor-next-phases
 version: 1.3.0
 description: |
   Full-repository audit producing a next-phase roadmap. Auto-detects tech stack
-  (Java/Spring, React/TS, NanoClaw, OpenClaw, generic) and routes to the appropriate
+  (Java/Spring, Rust, React/TS, NanoClaw, OpenClaw, generic) and routes to the appropriate
   architect agent. This skill should be used when the user wants to analyze a codebase
   and generate a prioritized roadmap of what to build or fix next, or says 'greenharbor-next-phases'.
   It runs a 7-stage analysis (inventory, repo dynamics, architecture map, spec alignment,
   health assessment, roadmap, open questions) and writes the report to a file.
-  Supports --deep-review for Java projects.
+  Supports --deep-review for Java and Rust projects.
 allowed-tools:
   - Read
   - Edit
@@ -34,18 +34,18 @@ Usage:
   /greenharbor-next-phases                                       Audit current repo
   /greenharbor-next-phases path/to/repo                          Audit a specific repo
   /greenharbor-next-phases --out plans/greenharbor-next-phases-YYYY-MM-DD.md Override output file
-  /greenharbor-next-phases --stack auto|java|react|nanoclaw|openclaw|generic
+  /greenharbor-next-phases --stack auto|java|rust|react|nanoclaw|openclaw|generic
   /greenharbor-next-phases --agent greenharbor-backend-planning-architect    Override agent type
   /greenharbor-next-phases --skip-interview                      Skip knobs interview, use defaults
-  /greenharbor-next-phases --deep-review                         (Java only) Parallel greenharbor-backend-reviewer-java for Stage D
+  /greenharbor-next-phases --deep-review                         (Java/Rust) Parallel production-readiness review for Stage D
 
 Arguments:
   repo-path       Path to repository root (default: current working directory)
   --out           Output file path (default: plans/greenharbor-next-phases-YYYY-MM-DD.md)
-  --stack         Stack detection: auto (default), java, react, nanoclaw, openclaw, generic
+  --stack         Stack detection: auto (default), java, rust, react, nanoclaw, openclaw, generic
   --agent         Agent type for analysis (overrides auto-detection)
   --skip-interview  Skip the project knobs interview, use "not specified" for all
-  --deep-review   (Java only) Spawn a parallel greenharbor-backend-reviewer-java agent for Stage D
+  --deep-review   (Java/Rust) Spawn the matching backend reviewer for Stage D
 
 Examples:
   /greenharbor-next-phases
@@ -61,10 +61,10 @@ Parse the invocation arguments as follows:
 
 - **Argument 1 (optional):** Path to repository root. Default: current working directory
 - **`--out` (optional):** Output file path. Default: `plans/greenharbor-next-phases-YYYY-MM-DD.md` (using today's date). This preserves prior reports across runs.
-- **`--stack` (optional):** `auto` (default), `java`, `react`, `nanoclaw`, `openclaw`, or `generic`. See Step 0.5 for auto-detection logic.
+- **`--stack` (optional):** `auto` (default), `java`, `rust`, `react`, `nanoclaw`, `openclaw`, or `generic`. See Step 0.5 for auto-detection logic.
 - **`--agent` (optional):** Agent type for the analysis. Overrides auto-detection. Default: auto-detected based on stack.
 - **`--skip-interview` (optional):** Skip the interactive knobs interview
-- **`--deep-review` (optional):** (Java stack only) Spawn a parallel `greenharbor-backend-reviewer-java` agent for Stage D
+- **`--deep-review` (optional):** (Java or Rust stack) Spawn the matching backend reviewer for Stage D
 
 ## Workflow
 
@@ -100,6 +100,7 @@ If `--agent` was provided, use that directly. Otherwise:
    | Probe | Stack |
    |---|---|
    | `*.java`, `*.gradle`, `pom.xml` anywhere in repo | `java` |
+   | `Cargo.toml` and `*.rs` anywhere in repo | `rust` |
    | `nanoclaw.json` or `NANOCLAW.md` in repo root | `nanoclaw` |
    | `openclaw.json` or `OPENCLAW.md` in repo root | `openclaw` |
    | `package.json` exists AND (`*.tsx` files or `next.config.*` or `vite.config.*`) | `react` |
@@ -110,12 +111,13 @@ If `--agent` was provided, use that directly. Otherwise:
    | Stack | Agent |
    |---|---|
    | `java` | `greenharbor-backend-planning-architect` |
+   | `rust` | `greenharbor-backend-planning-architect-rust` |
    | `react` | `greenharbor-frontend-architect` |
    | `nanoclaw` | `greenharbor-nanoclaw-architect` |
    | `openclaw` | `greenharbor-openclaw-architect` |
    | `generic` | `greenharbor-backend-planning-architect` |
 
-3. If `--deep-review` and stack is not `java`, warn: "--deep-review only applies to Java projects, ignoring."
+3. If `--deep-review` and stack is neither `java` nor `rust`, warn: "--deep-review applies only to Java or Rust projects, ignoring."
 
 Print: `Stack: <stack> | Architect: <agent>`
 
@@ -140,6 +142,7 @@ FORMAT section). Do NOT attempt to insert addenda at scattered points within the
 template — just append the whole matching block at the end.
 
 - If `stack=java`: append the JAVA ADDENDA block
+- If `stack=rust`: append the RUST ADDENDA block
 - If `stack=react`: append the REACT ADDENDA block
 - If `stack=generic`: append the GENERIC OVERRIDE block
 - If `stack=nanoclaw` or `stack=openclaw`: append nothing (these agents have built-in expertise)
@@ -157,10 +160,10 @@ Spawn the resolved architect agent using the Agent tool with:
 You MUST construct the prompt using the template below — do not pass these skill
 instructions verbatim.
 
-If `--deep-review` was specified (and stack is `java`), ALSO spawn a
-`greenharbor-backend-reviewer-java` agent **in parallel** using `run_in_background: true`
-with `description`: "Deep review Java codebase". See "Deep Review Agent Prompt"
-section for its prompt.
+If `--deep-review` was specified, spawn the stack-matched reviewer in parallel:
+`greenharbor-backend-reviewer-java` for Java or
+`greenharbor-backend-reviewer-rust` for Rust. Use the matching deep-review
+prompt below and a stack-specific description.
 
 ### Step 2: Merge Deep Review (conditional)
 
@@ -169,7 +172,7 @@ If `--deep-review` was used, wait for both agents to complete. Then:
 1. Read the architect agent's output file
 2. Read the deep-review agent's findings (returned in its result)
 3. Use the Edit tool to append new findings from the deep-review into Section 4
-   (Health Findings) under a subsection `### 4.7 Deep Review Findings (greenharbor-backend-reviewer-java)`
+   (Health Findings) under a subsection naming the reviewer that ran
 4. Deduplicate: if the deep reviewer found something the architect already noted,
    keep the more detailed version and use Edit to add "(confirmed by deep review)" to it
 5. If the deep reviewer surfaced new roadmap items, use Edit to append them to
@@ -575,6 +578,37 @@ When executing Stage F, also consider:
 - Spring Boot / Java version upgrade considerations
 </java-addenda>
 
+### RUST ADDENDA
+
+<rust-addenda>
+STACK-SPECIFIC INSTRUCTIONS FOR RUST:
+
+When executing Stage A, also inventory Cargo workspaces, package manifests and
+lockfiles, `rust-toolchain*`, edition/MSRV, features, targets, build scripts,
+crate types, public crates, and CI checks.
+
+When executing Stage B, identify crate/module boundaries, public-versus-private
+APIs, ownership and error boundaries, sync/async runtime use, task and shutdown
+ownership, FFI/unsafe isolation, and external I/O/storage boundaries.
+
+When executing Stage D, apply Rust-specific depth:
+- Testing: unit/integration/doctests, feature and target matrices, property/fuzz
+  testing or Miri/Loom where existing risk and tooling justify them
+- Security: OWASP controls, RustSec/supply chain, secret handling, unsafe/FFI
+  invariants, deserialization/resource bounds, and build/proc-macro exposure
+- Reliability: cancellation, timeouts, backpressure, locks across `.await`,
+  blocking work on async runtimes, task leaks, and shutdown behavior
+- Compatibility: SemVer, MSRV, feature interactions, serde/CLI/FFI contracts
+
+When executing Stage E, specify the appropriate Rust agent type:
+`greenharbor-backend-coder-rust`, `greenharbor-backend-reviewer-rust`,
+`greenharbor-backend-debugger-rust`, `greenharbor-backend-security-reviewer-rust`,
+or `greenharbor-backend-api-contract-reviewer-rust`.
+
+When executing Stage F, also consider toolchain/MSRV, edition/resolver,
+dependency-source, feature, and target-support upgrades.
+</rust-addenda>
+
 ### REACT ADDENDA
 
 <react-addenda>
@@ -612,8 +646,8 @@ When executing Stage F, also consider:
 <generic-addenda>
 STACK-SPECIFIC INSTRUCTIONS — GENERIC MODE:
 
-This project did not match a specific stack (Java, React, NanoClaw, OpenClaw).
-Do NOT apply Java/Spring-specific or React-specific analysis patterns. Instead:
+This project did not match a specific stack (Java, Rust, React, NanoClaw, OpenClaw).
+Do NOT apply Java/Spring-specific, Rust, or React-specific analysis patterns. Instead:
 
 1. Read the build file to identify the actual language and framework
 2. Analyze using language-agnostic software engineering principles
@@ -627,7 +661,7 @@ Do NOT apply Java/Spring-specific or React-specific analysis patterns. Instead:
 
 ## Deep Review Agent Prompt
 
-When `--deep-review` is active, spawn a `greenharbor-backend-reviewer-java` agent in parallel
+When `--deep-review` is active for Java, spawn a `greenharbor-backend-reviewer-java` agent in parallel
 with `run_in_background: true` and `description`: "Deep review Java codebase".
 Use this prompt:
 
@@ -653,7 +687,20 @@ Do NOT write any files. Return your findings as structured text in your response
 Sort by severity (Critical first).
 </deep-review-template>
 
+For Rust, spawn `greenharbor-backend-reviewer-rust` with `description`: "Deep review Rust codebase" and use:
+
+<rust-deep-review-template>
+Review the Rust codebase at {repo_path} for production-readiness issues. Focus on:
+
+1. Soundness/unsafe/FFI invariants and panic boundaries
+2. Async blocking, locks across `.await`, cancellation, shutdown, and resource bounds
+3. Security: authorization, untrusted input, secrets, SSRF/path/process injection, crypto, and supply chain
+4. Public API, SemVer/MSRV, feature, serde, CLI, and FFI compatibility
+5. Error handling, test quality, and dependency/build-script risk
+
+For each finding, provide severity, file and line, concise impact, and a one-sentence fix. Do not write files; return structured findings sorted by severity.
+</rust-deep-review-template>
+
 The skill orchestrator (you) is responsible for merging these findings into the
 architect's output during Step 2 using the Edit tool. The deep-review agent does
 NOT write to the output file.
-

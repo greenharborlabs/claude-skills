@@ -1,6 +1,6 @@
 ---
 name: greenharbor-orchestrate
-description: "Token-lean SWE-manager orchestrator. Parses a spec/task/plan file, resolves a task graph and agent suite, then delegates implementation to focused coder sub-agents followed by mandatory reviewer sub-agents in review-fix cycles. Auto-detects Java, NanoClaw, OpenClaw, React, and Python stacks, or accepts --coder/--reviewer/--architect overrides. Use when the user wants to execute a plan file, e.g. 'greenharbor-orchestrate plans/feature-x.md'. Supports --scope, --resume, --dry-run, --docs, and --branch."
+description: "Token-lean SWE-manager orchestrator. Parses a spec/task/plan file, resolves a task graph and agent suite, then delegates implementation to focused coder sub-agents followed by mandatory reviewer sub-agents in review-fix cycles. Auto-detects Java, Rust, NanoClaw, OpenClaw, React, and Python stacks, or accepts --coder/--reviewer/--architect overrides. Use when the user wants to execute a plan file, e.g. 'greenharbor-orchestrate plans/feature-x.md'. Supports --scope, --resume, --dry-run, --docs, and --branch."
 allowed-tools:
   - Read
   - Grep

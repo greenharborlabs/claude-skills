@@ -5,7 +5,7 @@ description: |
   Universal code review with multiple modes: diff-based (default), full-project,
   scoped (package/service/directory), and endpoint-flow tracing. Detects tech stack,
   dispatches specialized reviewer agents in parallel, applies checklist review,
-  merges and deduplicates findings. Supports Java/Spring and React/TS stacks.
+  merges and deduplicates findings. Supports Java/Spring, Rust, and React/TS stacks.
 allowed-tools:
   - Bash
   - Read
@@ -210,6 +210,7 @@ Using the **file list** from Step 3, classify into stacks and flags:
 
 ### Stack detection
 - **`java`**: any file matching `*.java`, `*.gradle`, `pom.xml`, or `*.properties`/`*.yml` under a `src/` directory
+- **`rust`**: `Cargo.toml` with `*.rs` source files, including workspace members
 - **`react`**: any file matching `*.tsx`, `*.ts`, `*.jsx` that contains React/component patterns (imports from `react`, component definitions, JSX, hooks)
 
 ### Flag detection
@@ -217,6 +218,13 @@ Using the **file list** from Step 3, classify into stacks and flags:
 - **`performance`** flag: file content contains: `@Repository`, `@Cacheable`, `RestTemplate`, `WebClient`, `@Transactional`, `@Query`, `@Async`, `connection pool`, `cache`
 - **`concurrency`** flag: file content contains: `synchronized`, `ReentrantLock`, `AtomicReference`, `AtomicInteger`, `AtomicLong`, `CompletableFuture`, `StructuredTaskScope`, `@Async`, `@Scheduled`, `ExecutorService`, `ThreadPoolTaskExecutor`, `ConcurrentHashMap`, `volatile`, `@Version`, `ShedLock`, `parallelStream`, `virtual.enabled`
 - **`api-contract`** flag: file content contains: `@RestController`, `@GetMapping`, `@PostMapping`, `@PutMapping`, `@DeleteMapping`, `@PatchMapping`, `@RequestMapping`, `@RequestBody`, `@PathVariable`, `@RequestParam`, `@ControllerAdvice`, `@ExceptionHandler`, `@Schema`, `@Operation`, `Pageable`, `@JsonProperty`, `@JsonAlias`
+
+For Rust, also set `security` for auth/secret/token/crypto, `unsafe`, `extern`,
+FFI, `build.rs`, process/filesystem/outbound HTTP, or registry/source changes;
+set `performance` for blocking I/O, allocation-heavy, database, or cache paths;
+set `concurrency` for async tasks, channels, locks, atomics, cancellation, or
+shutdown; and set `api-contract` for public `pub` items, crate exports, serde,
+routes, OpenAPI, CLI arguments/output, FFI, features, or MSRV changes.
 
 Record which stacks and flags were detected. Multiple stacks can be active simultaneously.
 
@@ -228,9 +236,10 @@ Always read `~/.claude/skills/greenharbor-code-review/checklist-universal.md`.
 
 Then read stack-specific checklists based on detection:
 - If `java` detected → also read `~/.claude/skills/greenharbor-code-review/checklist-java-spring.md`
+- If `rust` detected → also read `~/.claude/skills/greenharbor-code-review/checklist-rust.md`
 - If `react` detected → also read `~/.claude/skills/greenharbor-code-review/checklist-react-ts.md`
 
-Additionally, Glob for `~/.claude/skills/greenharbor-code-review/checklist-*.md` and load any extra checklists not already loaded. This allows user-added checklists (e.g., `checklist-python.md`, `checklist-go.md`) to be picked up automatically.
+Additionally, Glob for `~/.claude/skills/greenharbor-code-review/checklist-*.md` and load user-added checklists, excluding known stack-specific files (`checklist-java-spring.md`, `checklist-rust.md`, and `checklist-react-ts.md`) unless their stack was detected.
 
 **If `checklist-universal.md` cannot be read, STOP and report the error.** Stack-specific checklists are optional — warn if missing but continue.
 
@@ -245,6 +254,9 @@ Based on mode and detected stacks, launch specialized reviewer agents **in paral
 - `java` detected → launch `greenharbor-backend-reviewer-java` (includes performance and concurrency checks)
 - `java` + `security` flag → also launch `greenharbor-backend-security-reviewer-java`
 - `java` + `api-contract` flag → also launch `greenharbor-backend-api-contract-reviewer-java`
+- `rust` detected → launch `greenharbor-backend-reviewer-rust` (includes performance and concurrency checks)
+- `rust` + `security` flag → also launch `greenharbor-backend-security-reviewer-rust`
+- `rust` + `api-contract` flag → also launch `greenharbor-backend-api-contract-reviewer-rust`
 - `react` detected → launch `greenharbor-frontend-reviewer`
 
 **Agent prompt for DIFF mode:**
@@ -276,6 +288,9 @@ Dispatch agents using the same flag-based pattern as DIFF mode:
 - `java` detected → launch `greenharbor-backend-reviewer-java` (includes performance and concurrency checks)
 - `java` + `security` flag → also launch `greenharbor-backend-security-reviewer-java`
 - `java` + `api-contract` flag → also launch `greenharbor-backend-api-contract-reviewer-java`
+- `rust` detected → launch `greenharbor-backend-reviewer-rust` (includes performance and concurrency checks)
+- `rust` + `security` flag → also launch `greenharbor-backend-security-reviewer-rust`
+- `rust` + `api-contract` flag → also launch `greenharbor-backend-api-contract-reviewer-rust`
 - `react` detected → launch `greenharbor-frontend-reviewer`
 
 Launch all agents **in parallel**.
@@ -357,7 +372,7 @@ Fix: suggested fix
 
 ### FLOW mode — agent dispatch
 
-Launch the detected stack's primary reviewer agent (`greenharbor-backend-reviewer-java` for Java, `greenharbor-frontend-reviewer` for React) with the full call chain. If no stack detected, use a `general-purpose` agent.
+Launch the detected stack's primary reviewer agent (`greenharbor-backend-reviewer-java` for Java, `greenharbor-backend-reviewer-rust` for Rust, `greenharbor-frontend-reviewer` for React) with the full call chain. If no stack detected, use a `general-purpose` agent.
 
 **Agent prompt for FLOW mode:**
 ```
@@ -390,8 +405,11 @@ Flow files (in call-chain order):
 ```
 
 Additionally, launch specialized agents based on detected flags (same pattern as DIFF mode), providing the flow files as review input:
-- `security` flag → launch `greenharbor-backend-security-reviewer-java` or `greenharbor-frontend-reviewer` (as appropriate)
-- `api-contract` flag → launch `greenharbor-backend-api-contract-reviewer-java`
+- `java` + `security` flag → launch `greenharbor-backend-security-reviewer-java`
+- `java` + `api-contract` flag → launch `greenharbor-backend-api-contract-reviewer-java`
+- `rust` + `security` flag → launch `greenharbor-backend-security-reviewer-rust`
+- `rust` + `api-contract` flag → launch `greenharbor-backend-api-contract-reviewer-rust`
+- `react` + security or API-contract flag → launch `greenharbor-frontend-reviewer`
 
 Launch all flag-based agents **in parallel** with the deep-review agent.
 
