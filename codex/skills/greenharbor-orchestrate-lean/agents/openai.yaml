@@ -1,0 +1,4 @@
+interface:
+  display_name: "Lean Orchestrate"
+  short_description: "Execute plans with one review gate"
+  default_prompt: "Use $greenharbor-orchestrate-lean to execute this plan file with a single final review."
