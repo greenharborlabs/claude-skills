@@ -1,0 +1,1 @@
+/Users/mark/gstack/sync-gbrain/SKILL.md

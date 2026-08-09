@@ -1,0 +1,1 @@
+/Users/mark/gstack/canary/SKILL.md

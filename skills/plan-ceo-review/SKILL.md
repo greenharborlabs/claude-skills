@@ -1,0 +1,1 @@
+/Users/mark/gstack/plan-ceo-review/SKILL.md

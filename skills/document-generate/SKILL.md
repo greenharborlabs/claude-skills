@@ -1,0 +1,1 @@
+/Users/mark/gstack/document-generate/SKILL.md

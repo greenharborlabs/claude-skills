@@ -1,0 +1,1 @@
+/Users/mark/gstack/make-pdf/SKILL.md

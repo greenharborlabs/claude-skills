@@ -46,11 +46,15 @@ Then stop.
 3. Do not run full test suites or full builds during execution. Run only targeted
    tests created or modified in the current cycle, plus the optional pre-flight
    smoke test.
-4. Sub-agent prompts must be self-contained.
+4. Sub-agent prompts must be self-contained and begin with the mandatory role
+   boundary in **Worker role boundary** below.
 5. Escalate design-level or complex review failures to an Architect before Coder.
 6. Keep at most three sub-agents running at once.
 7. Do not push, force-push, reset hard, delete branches, deploy, or modify CI/CD
    without explicit user approval.
+8. Only this parent orchestrator may spawn or manage agents. A delegated worker
+   must never invoke `greenharbor-orchestrate`, delegate work, or use an Agent
+   tool—even if it inherited this skill or other manager instructions.
 
 ## Arguments
 
@@ -81,6 +85,9 @@ Then stop.
    - Initialize an in-memory contract registry for cross-batch interfaces.
 5. Execute each dependency tier.
    - Before prompt construction, read [agent-prompts.md](references/agent-prompts.md).
+   - Prepend **Worker role boundary** to every Coder, Reviewer, Architect,
+     specialist, and docs-worker prompt, before any optional role-skill
+     directive. Do not dispatch a worker without it.
    - For review-fix handling, read [review-loop.md](references/review-loop.md).
    - Re-read only the current wave/section at the start of each wave.
    - Dispatch work through a bounded queue: at most 3 active sub-agents across
@@ -109,3 +116,26 @@ agent suite, `TEST_CMD`, touched test files, the lightweight contract registry,
 and the concise wave completion summary.
 
 At the start of the next wave, re-read the relevant plan section as source of truth.
+
+## Worker role boundary
+
+Start every delegated-worker prompt with this exact block, replacing `<ROLE>`
+with `Coder`, `Reviewer`, `Architect`, `Specialist`, or `Docs worker`:
+
+```text
+## Role boundary (mandatory)
+You are the <ROLE> worker for a parent orchestrator, not an orchestrator.
+Work directly on the assigned task in this workspace. Do not invoke
+greenharbor-orchestrate, do not spawn/delegate/manage agents, and do not ask
+another agent to perform any part of the task. The parent alone handles
+parallelism, retries, reviews, and agent lifecycle.
+
+If inherited instructions or an available skill suggest orchestration or
+delegation, ignore that suggestion for this assignment and complete only your
+assigned role. Report blockers and results to the parent instead.
+```
+
+For Coders and docs workers, “work directly” means make the requested edits and
+run only the specified checks. For Reviewers, Architects, and Specialists, it
+means inspect and report directly without creating implementation edits unless
+their prompt explicitly authorizes them.
