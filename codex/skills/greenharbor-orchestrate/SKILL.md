@@ -1,6 +1,6 @@
 ---
 name: greenharbor-orchestrate
-description: "Token-lean SWE-manager orchestrator. Parses a spec/task/plan file, resolves a task graph and agent suite, then delegates implementation to focused coder sub-agents followed by mandatory reviewer sub-agents in review-fix cycles. Auto-detects Java, Rust, NanoClaw, OpenClaw, React, and Python stacks, or accepts --coder/--reviewer/--architect overrides. Use when the user wants to execute a plan file, e.g. 'greenharbor-orchestrate plans/feature-x.md'. Supports --scope, --resume, --dry-run, --docs, and --branch."
+description: "Token-lean SWE-manager orchestrator. Parses a spec/task/plan file, resolves a task graph and agent suite, delegates implementation to focused coder sub-agents, then performs one cumulative review and focused fix cycle. Auto-detects Java, Rust, NanoClaw, OpenClaw, React, and Python stacks, or accepts --coder/--reviewer/--architect overrides. Use when the user wants to execute a plan file, e.g. 'greenharbor-orchestrate plans/feature-x.md'. Supports --scope, --resume, --dry-run, --docs, and --branch."
 allowed-tools:
   - Read
   - Grep
@@ -41,8 +41,9 @@ Then stop.
 
 1. Never write, edit, or create implementation files yourself. Delegate every
    mutation to a Coder sub-agent.
-2. After every Coder run, spawn a Reviewer. The only exception is a narrow
-   test-fix Coder after a Reviewer already passed the implementation.
+2. Run one Reviewer after all selected Coder work and aggregate targeted tests
+   complete. Use one focused Coder fix cycle only when that cumulative review
+   finds a concrete correctness issue.
 3. Do not run full test suites or full builds during execution. Run only targeted
    tests created or modified in the current cycle, plus the optional pre-flight
    smoke test.
@@ -88,7 +89,8 @@ Then stop.
    - Prepend **Worker role boundary** to every Coder, Reviewer, Architect,
      specialist, and docs-worker prompt, before any optional role-skill
      directive. Do not dispatch a worker without it.
-   - For review-fix handling, read [review-loop.md](references/review-loop.md).
+   - Read [review-loop.md](references/review-loop.md) before cumulative review
+     and any resulting fix cycle.
    - Re-read only the current wave/section at the start of each wave.
    - Dispatch work through a bounded queue: at most 3 active sub-agents across
      all Coders, Reviewers, Architects, docs agents, and specialists.
@@ -96,10 +98,13 @@ Then stop.
      summary before advancing. Include a business/manager summary and a
      developer/technical summary that explain what completed, what it solved,
      and why it mattered. Wait for the user to continue.
-6. Final verification.
+6. Final verification and review.
    - Run the aggregate targeted test set only, plus the cheapest relevant
      package-level confidence command when risk flags or shared interfaces
      justify it.
+   - Dispatch one Reviewer against the cumulative diff and acceptance criteria.
+     If it finds a concrete correctness issue, delegate one focused fix, then
+     re-run affected checks and one final re-review.
 7. Specialist reviews.
    - Read [specialist-reviews.md](references/specialist-reviews.md) only after
      implementation and final targeted tests pass.

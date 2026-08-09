@@ -1,6 +1,6 @@
 # Review Loop
 
-Load this when executing batches after Coder prompts are ready.
+Load this after all selected Coder work and aggregate targeted checks complete.
 
 ## Wave Checklist
 
@@ -11,9 +11,9 @@ Wave N checklist:
 - [ ] Task-ID: subject
 ```
 
-After each task passes review and tests, mark it complete and print the updated
-checklist. Before advancing, verify all tasks in the wave are complete. If any
-are not complete, execute them before moving on.
+After each Coder reports completion, mark the task as implemented and print the
+updated checklist. Do not mark tasks review-complete until the cumulative review
+and final checks pass.
 
 ## Coder Failure Handling
 
@@ -23,19 +23,16 @@ If a Coder times out, crashes, or omits the expected completion report:
 2. Retry once with the same prompt.
 3. If still invalid, mark blocked and continue only where dependencies allow.
 
-If `SELF_TEST: FAIL`, still spawn the Reviewer and prepend the failure details.
+If `SELF_TEST: FAIL`, record the failure, continue only with independent work,
+and include it in aggregate verification before review.
 
-## Mandatory Reviewer
+## Cumulative Reviewer
 
-After any Coder implementation or fix, spawn Reviewer before inspecting changed
-files, running tests, or declaring success. No self-review.
-
-Exception: a Coder spawned only to fix failing tests after Reviewer PASS does not
-need another Reviewer.
-
-The Reviewer still counts against the global `ACTIVE_AGENTS` limit. If three
-agents are already active, wait for and close a completed agent before spawning
-the Reviewer.
+After all selected Coder work and aggregate targeted checks pass, spawn one
+Reviewer against the full cumulative diff and all acceptance criteria. No
+self-review. The Reviewer still counts against the global `ACTIVE_AGENTS` limit.
+If three agents are already active, wait for and close a completed agent before
+spawning it.
 
 ## Acceptance Criteria Cross-Check
 
@@ -49,11 +46,11 @@ After Reviewer returns:
 
 Use no additional tool calls for this step.
 
-## Fix Loop
+## Focused Fix Cycle
 
-Maintain one cycle counter per work group. Max 3 Coder->Reviewer cycles total.
+Allow at most one Coder -> Reviewer fix cycle for the cumulative review.
 
-If FAIL and `COMPLEX_ISSUES: NO`, spawn Coder with:
+If FAIL and `COMPLEX_ISSUES: NO`, spawn one Coder with:
 
 ```text
 ## Fix task
@@ -81,30 +78,28 @@ Fix reviewer issues.
 Address every CRITICAL. Address WARNING unless it violates spec. Do not expand scope.
 ```
 
-If FAIL and `COMPLEX_ISSUES: YES`, spawn Architect first, then Coder, then Reviewer.
-The cycle counter does not reset after architect escalation.
+If FAIL and `COMPLEX_ISSUES: YES`, stop and report the architectural blocker;
+do not expand into an open-ended review loop.
 
-Architect and fix Coder agents also count against `ACTIVE_AGENTS`; free a slot
-before each spawn.
+The fix Coder counts against `ACTIVE_AGENTS`; free a slot before spawning it.
 
-After 3 cycles, stop on remaining CRITICAL issues. Persist WARNING/INFO in the
-summary but do not block.
+After the fix Coder completes, run affected checks and one final re-review. Stop
+on any remaining CRITICAL issue. Persist WARNING/INFO in the summary but do not
+block.
 
-## Targeted Tests
+## Targeted Test Failure Handling
 
-After Reviewer PASS, run only tests created or modified in the cycle using
-`TEST_CMD`. If tests fail:
+If the aggregate targeted test set run during final verification fails:
 
 - Treat as CRITICAL.
-- Spawn a test-fix Coder.
-- Re-run targeted tests.
-- Max 2 test-fix cycles.
+- Allow one focused test-fix Coder, then re-run only affected tests. If they
+  still fail, report and stop.
 
 Do not run the full suite here.
 
 ## Mark Complete And Contract Registry
 
-After review and targeted tests pass:
+After the cumulative review and targeted tests pass:
 
 - Mark each task complete immediately.
 - Add up to 5 `NEW_INTERFACES` entries per batch to the contract registry:
@@ -115,8 +110,8 @@ After review and targeted tests pass:
 
 ## Wave Completion Summary
 
-After all tasks in a wave pass review and targeted tests, stop before starting
-the next wave. Print a concise summary in this shape:
+After all tasks in a wave are implemented, stop before starting the next wave.
+Print a concise implementation-progress summary in this shape:
 
 ```text
 Wave N complete.
@@ -128,7 +123,7 @@ Business / manager summary:
 
 Developer / technical summary:
 - What changed:
-- Tests / review:
+- Tests / review: deferred to final cumulative gate
 - Technical impact:
 ```
 
