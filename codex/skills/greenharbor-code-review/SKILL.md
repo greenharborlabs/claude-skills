@@ -3,8 +3,8 @@ name: greenharbor-code-review
 description: |
   Universal code review with multiple modes: diff-based (default), full-project,
   scoped (package/service/directory), and endpoint-flow tracing. Detects tech stack,
-  applies specialized review checklists, merges and deduplicates findings. Supports
-  Java/Spring, Rust, and React/TS stacks. Use when user wants a deep code review, says
+  applies specialized review checklists, verifies, merges, and deduplicates findings.
+  Supports Java/Spring, Rust, Python, and React/TS stacks. Use when user wants a deep code review, says
   "greenharbor-code-review", wants a pre-landing check, or needs production-readiness assessment.
   Modes: /greenharbor-code-review (diff), /greenharbor-code-review --scope src/billing/ (scoped),
   /greenharbor-code-review --full (full project), /greenharbor-code-review --flow "POST /api/orders" (endpoint trace).
@@ -24,7 +24,7 @@ If the argument is `--help` or `help`, print this usage summary and stop:
 /greenharbor-code-review — Universal code review with actionable triage
 
 Usage:
-  /greenharbor-code-review                                    Diff against main (default)
+  /greenharbor-code-review                                    Diff against the default branch
   /greenharbor-code-review --branch develop                   Diff against a specific branch
   /greenharbor-code-review --baseline HEAD~5                  Diff against last 5 commits
   /greenharbor-code-review --scope src/billing/               Review a specific directory
@@ -34,7 +34,7 @@ Usage:
   /greenharbor-code-review --flow "POST /api/orders"          Trace and review an endpoint flow
 
 Flags:
-  --baseline <ref>       Override diff base (default: origin/main)
+  --baseline <ref>       Override diff base (default: origin's default branch)
   --branch <name>        Alias for --baseline
   --critical-only        Only report CRITICAL findings
   --fix                  Auto-apply fixes for CRITICAL IMPL issues
@@ -59,7 +59,7 @@ Output:
   - _(default)_ -> DIFF mode
 
 - **Flags**:
-  - `--baseline <ref>` or `--branch <ref>` -> custom diff base (default: `origin/main`)
+  - `--baseline <ref>` or `--branch <ref>` -> custom diff base (default: origin's default branch)
   - `--critical-only` -> suppress INFORMATIONAL findings
   - `--fix` -> auto-apply CRITICAL IMPL fixes
   - `--interactive` -> prompt on CRITICAL findings after reporting
@@ -71,7 +71,7 @@ Output:
 
 Before reading code or diffs, size the review and choose the smallest sufficient input.
 
-1. Start with metadata: `git diff --stat`, `git diff --numstat`, and `git diff --name-only` for DIFF mode; file counts and line counts for SCOPE/FULL/FLOW.
+1. Start with metadata: `git diff BASE --numstat` plus untracked files for DIFF mode (see Step 3); file counts and line counts for SCOPE/FULL/FLOW.
 2. Exclude generated, binary, vendored, build, lock, snapshot, and minified files unless they are the explicit target.
 3. Prefer patches over whole files in DIFF mode. Read whole files only when the patch lacks enough context to verify a finding.
 4. If input is large, batch by file/module and synthesize findings after all batches:
@@ -87,18 +87,18 @@ Before reading code or diffs, size the review and choose the smallest sufficient
 
 ### DIFF mode (default)
 
-1. Determine baseline ref (default: `origin/main`, or `--baseline` value).
-2. Get current branch: `git branch --show-current`
-3. If on `main` with no changes, output "Nothing to review" and stop.
-4. Run `git fetch origin --quiet` when `origin` exists.
-5. Run `git diff <baseline> --stat`, `git diff <baseline> --numstat`, and `git diff <baseline> --name-only`.
-6. Read patch content in token-aware batches using `git diff <baseline> -- <file...>`. Use `--unified=80` only for files needing broader context.
+1. Run `git fetch origin --quiet` when `origin` exists; if it fails (offline), continue with local refs and note it.
+2. Resolve the baseline: the `--baseline`/`--branch` value (falling back to `origin/<value>` if only that resolves); otherwise the target of `git symbolic-ref --short refs/remotes/origin/HEAD`; otherwise the first existing of `origin/main`, `origin/master`, `main`, `master`.
+3. Compute `BASE=$(git merge-base <baseline> HEAD)` and always diff against `BASE`, never the baseline tip (diffing the tip shows commits that landed on the baseline after you branched as reverts).
+4. Collect `git diff BASE --numstat` (committed plus uncommitted tracked changes) and `git ls-files --others --exclude-standard` (untracked new files, which `git diff` omits; review them as whole new files). If both are empty, output "No changes found against `<baseline>`." and stop.
+5. Read patch content in token-aware batches using `git diff BASE -- <file...>`. Widen context (e.g. `-U40`) only for files needing it.
 
 ### SCOPE mode
 
 For each target (comma-separated or space-separated):
 
 1. **Resolve to files:**
+   - Existing file path -> that file
    - Directory path -> search for source files under it
    - Glob pattern -> search directly
    - Name -> search for class/interface/function definitions and matching filenames
@@ -122,6 +122,8 @@ For each target (comma-separated or space-separated):
 2. **Find the controller/route handler:**
    - Java/Spring: search for `@PostMapping`, `@GetMapping` etc. with the path pattern
    - React/Express/Node: search for `router.post`, route definitions
+   - Python: FastAPI `@app.post`/`@router.post`, Flask `@app.route(..., methods=[...])`
+   - Rust: Axum `.route("<path>", post(handler))`, Actix `#[post("<path>")]`
 3. **Trace the call chain:** Controller -> Service(s) -> Repository/Client(s) -> Entities/DTOs -> Config
 4. Read files in call-chain order, capped at 20 source files or 4,000 lines per batch. If the chain exceeds the cap, review controller/service/repository layers separately and synthesize.
 
@@ -134,6 +136,7 @@ Using the file list, classify:
 ### Stack detection
 - **`java`**: `*.java`, `*.gradle`, `pom.xml`, or `*.properties`/`*.yml` under `src/`
 - **`rust`**: `Cargo.toml` with `*.rs` source files, including workspace members
+- **`python`**: `*.py` with `pyproject.toml`, `setup.py`, `setup.cfg`, or `requirements*.txt`
 - **`react`**: `*.tsx`, `*.ts`, `*.jsx` with React patterns (imports, components, hooks)
 
 ### Flag detection
@@ -149,6 +152,11 @@ set `concurrency` for async tasks, channels, locks, atomics, cancellation, or
 shutdown; and set `api-contract` for public `pub` items, crate exports, serde,
 routes, OpenAPI, CLI arguments/output, FFI, features, or MSRV changes.
 
+For Python, set `security` for auth/credential/secret/token/payer/wallet/payment
+paths, `subprocess`, filesystem state, HTTP clients, or env/config handling; set
+`api-contract` for FastAPI/Flask routes, Typer/Click/argparse CLIs, public
+`__init__.py` exports, request/response/schema models, or `openapi.*`.
+
 ---
 
 ## Step 5: Load checklists
@@ -159,6 +167,8 @@ Then load stack-specific checklists:
 - If `java` detected -> also load `./references/checklist-java-spring.md`
 - If `rust` detected -> also load `./references/checklist-rust.md`
 - If `react` detected -> also load `./references/checklist-react-ts.md`
+
+Also load any other `./references/checklist-*.md` (user-added checklists).
 
 **If `checklist-universal.md` cannot be loaded, STOP and report the error.**
 
@@ -245,6 +255,10 @@ For FULL mode, apply checklists per-section (not all at once) to keep scope boun
    - CRITICAL or HIGH -> CRITICAL
    - MEDIUM or LOW -> INFORMATIONAL
 3. If `--critical-only`, drop all INFORMATIONAL findings.
+4. **Verify CRITICAL findings:** re-read each cited location with about 10 lines of
+   context and confirm the problem exists in the current code. Drop findings that
+   are already handled or wrong (count them as "dropped on verification"); mark
+   plausible-but-unprovable ones `(unverified)`. Verify at most 15.
 
 ### 8b. Classify each finding by resolution path
 
@@ -267,9 +281,9 @@ When in doubt, classify as DESIGN.
 ### 8c. Group findings into parallel waves
 
 1. Determine each finding's **file footprint** (files the fix touches).
-2. Build waves greedily (DESIGN and IMPL independently):
-   - Findings whose file footprints don't overlap go in the same wave.
-   - Cross-cutting/unbounded findings get their own solo wave.
+2. Build waves (DESIGN and IMPL independently), taking findings in severity order:
+   - Put each cross-cutting/unbounded finding in its own wave.
+   - Put every other finding in the first existing wave whose claimed files do not overlap its footprint; otherwise open a new wave.
 3. Number waves sequentially: DESIGN waves first, then IMPL waves.
 4. **Consolidate within waves:** Group related findings into single actionable workloads.
 
@@ -333,6 +347,7 @@ If no issues: `<Report Header>: No issues found.`
 otherwise auto-generate at `reports/greenharbor-code-review-<mode>-<YYYY-MM-DD>.md`.
 In DIFF mode, write to file when `--out` is specified or when an IMPL mini-plan will be generated.
 If DIFF mode needs an implicit report path, use `reports/greenharbor-code-review-diff-<YYYY-MM-DD>.md`.
+If the target file already exists, append `-2`, `-3`, ... instead of overwriting.
 Output to stdout regardless of mode.
 
 ### 8f. Write IMPL mini-plan
@@ -362,7 +377,7 @@ Surgical fixes identified by /greenharbor-code-review.
 - <fix restated as checkable condition>
 - Existing tests continue to pass
 **Error handling:** N/A (surgical fix)
-**Tests:** Verify via existing tests; add regression test if no coverage
+**Tests:** Add a regression test that fails before the fix; run the affected tests
 
 ### W1-02: <next finding>
 ...
@@ -380,8 +395,9 @@ and append `--branch <ref>` to all playbook commands.
 Skip this step in SCOPE, FULL, and FLOW modes.
 
 **If `--fix` flag set:**
-- Auto-apply CRITICAL **IMPL** fixes only. Never auto-fix DESIGN items.
-- Output summary of changes. Do NOT commit or push.
+- Auto-apply verified CRITICAL **IMPL** fixes only. Never auto-fix DESIGN or `(unverified)` items.
+- Run the narrowest test command covering the touched files, if obvious; not the full suite.
+- Output summary of changes and test results. Do NOT commit or push.
 
 **If `--interactive` flag set and `--fix` not set:**
 - For each CRITICAL **IMPL** finding, ask: Fix now? Acknowledge? False positive?

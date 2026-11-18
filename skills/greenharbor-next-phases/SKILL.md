@@ -1,14 +1,14 @@
 ---
 name: greenharbor-next-phases
-version: 1.3.0
+version: 1.4.0
 description: |
   Full-repository audit producing a next-phase roadmap. Auto-detects tech stack
-  (Java/Spring, Rust, React/TS, NanoClaw, OpenClaw, generic) and routes to the appropriate
+  (Java/Spring, Rust, Python, React/TS, NanoClaw, OpenClaw, generic) and routes to the appropriate
   architect agent. This skill should be used when the user wants to analyze a codebase
   and generate a prioritized roadmap of what to build or fix next, or says 'greenharbor-next-phases'.
   It runs a 7-stage analysis (inventory, repo dynamics, architecture map, spec alignment,
   health assessment, roadmap, open questions) and writes the report to a file.
-  Supports --deep-review for Java and Rust projects.
+  Supports --scope and --deep-review (Java, Rust, Python).
 allowed-tools:
   - Read
   - Edit
@@ -34,24 +34,27 @@ Usage:
   /greenharbor-next-phases                                       Audit current repo
   /greenharbor-next-phases path/to/repo                          Audit a specific repo
   /greenharbor-next-phases --out plans/greenharbor-next-phases-YYYY-MM-DD.md Override output file
-  /greenharbor-next-phases --stack auto|java|rust|react|nanoclaw|openclaw|generic
+  /greenharbor-next-phases --stack auto|java|rust|python|react|nanoclaw|openclaw|generic
   /greenharbor-next-phases --agent greenharbor-backend-planning-architect    Override agent type
+  /greenharbor-next-phases --scope src/billing                   Focus the audit on one path
   /greenharbor-next-phases --skip-interview                      Skip knobs interview, use defaults
-  /greenharbor-next-phases --deep-review                         (Java/Rust) Parallel production-readiness review for Stage D
+  /greenharbor-next-phases --deep-review                         (Java/Rust/Python) Parallel production-readiness review for Stage D
 
 Arguments:
   repo-path       Path to repository root (default: current working directory)
   --out           Output file path (default: plans/greenharbor-next-phases-YYYY-MM-DD.md)
-  --stack         Stack detection: auto (default), java, rust, react, nanoclaw, openclaw, generic
+  --stack         Stack detection: auto (default), java, rust, python, react, nanoclaw, openclaw, generic
   --agent         Agent type for analysis (overrides auto-detection)
+  --scope         Path to focus the audit on (default: entire repo)
   --skip-interview  Skip the project knobs interview, use "not specified" for all
-  --deep-review   (Java/Rust) Spawn the matching backend reviewer for Stage D
+  --deep-review   (Java/Rust/Python) Spawn the matching backend reviewer for Stage D
 
 Examples:
   /greenharbor-next-phases
   /greenharbor-next-phases ~/code/other-project
   /greenharbor-next-phases --out docs/audit-report.md
   /greenharbor-next-phases --stack java --deep-review
+  /greenharbor-next-phases --scope services/payments --skip-interview
   /greenharbor-next-phases --agent greenharbor-backend-planning-architect
 ```
 
@@ -61,28 +64,32 @@ Parse the invocation arguments as follows:
 
 - **Argument 1 (optional):** Path to repository root. Default: current working directory
 - **`--out` (optional):** Output file path. Default: `plans/greenharbor-next-phases-YYYY-MM-DD.md` (using today's date). This preserves prior reports across runs.
-- **`--stack` (optional):** `auto` (default), `java`, `rust`, `react`, `nanoclaw`, `openclaw`, or `generic`. See Step 0.5 for auto-detection logic.
+- **`--stack` (optional):** `auto` (default), `java`, `rust`, `python`, `react`, `nanoclaw`, `openclaw`, or `generic`. See Step 0.5 for auto-detection logic.
 - **`--agent` (optional):** Agent type for the analysis. Overrides auto-detection. Default: auto-detected based on stack.
+- **`--scope` (optional):** Path (relative to the repo root) to focus the audit on. Overrides the interview's scope answer. Default: entire repo.
 - **`--skip-interview` (optional):** Skip the interactive knobs interview
-- **`--deep-review` (optional):** (Java or Rust stack) Spawn the matching backend reviewer for Stage D
+- **`--deep-review` (optional):** (Java, Rust, or Python stack) Spawn the matching backend reviewer for Stage D
 
 ## Workflow
 
 ### Step 0: Project Knobs Interview
 
-Unless `--skip-interview` is passed, ask the user these questions to scope the
-audit. Accept brief answers — these inform priority weighting in the roadmap.
+Unless `--skip-interview` is passed, ask one AskUserQuestion call (the tool takes
+at most 4 questions, each with 2-4 options; free-text answers come through
+"Other"). These inform priority weighting in the roadmap.
 
-Questions to ask (use AskUserQuestion, up to 5 per call):
-
-1. **Primary goal:** What matters most right now? (speed / correctness / scale / cost)
-2. **Known pain points:** What are the top 2-3 things bothering you about this codebase?
-3. **Non-negotiables:** Any hard constraints? (security, compliance, tech stack locks)
-4. **Risk tolerance:** How aggressive should recommendations be? (conservative / moderate / aggressive)
-5. **Scope focus:** Entire repo, or a specific module/service/directory? (default: entire repo)
+1. **Primary goal:** What matters most right now? Options: speed, correctness,
+   scale, cost.
+2. **Risk tolerance:** How aggressive should recommendations be? Options:
+   conservative, moderate, aggressive.
+3. **Pain points & non-negotiables:** Anything already bothering you, or hard
+   constraints (security, compliance, stack locks)? Options: "None — just run it",
+   "Yes — I'll describe them (Other)".
+4. **Scope focus** (omit when `--scope` was given): Options: "Entire repo", plus
+   up to two top-level source directories you can see, with "Other" for any path.
 
 If the user skips or says "just run it", proceed with all knobs as "not specified"
-and scope as "entire repo".
+and scope as `--scope` or "entire repo".
 
 Record the answers as a knobs block at the top of the output file.
 
@@ -103,6 +110,8 @@ If `--agent` was provided, use that directly. Otherwise:
    | `Cargo.toml` and `*.rs` anywhere in repo | `rust` |
    | `nanoclaw.json` or `NANOCLAW.md` in repo root | `nanoclaw` |
    | `openclaw.json` or `OPENCLAW.md` in repo root | `openclaw` |
+   | `*.py` + `openclaw`/`alpaca`/`kalshi` signals | `openclaw` |
+   | `pyproject.toml`, `setup.py`, or `requirements*.txt` with `*.py` files | `python` |
    | `package.json` exists AND (`*.tsx` files or `next.config.*` or `vite.config.*`) | `react` |
    | Everything else | `generic` |
 
@@ -112,12 +121,14 @@ If `--agent` was provided, use that directly. Otherwise:
    |---|---|
    | `java` | `greenharbor-backend-planning-architect` |
    | `rust` | `greenharbor-backend-planning-architect-rust` |
+   | `python` | `greenharbor-backend-planning-architect-python` |
    | `react` | `greenharbor-frontend-architect` |
    | `nanoclaw` | `greenharbor-nanoclaw-architect` |
    | `openclaw` | `greenharbor-openclaw-architect` |
    | `generic` | `greenharbor-backend-planning-architect` |
 
-3. If `--deep-review` and stack is neither `java` nor `rust`, warn: "--deep-review applies only to Java or Rust projects, ignoring."
+3. If `--deep-review` and stack is not `java`, `rust`, or `python`, warn:
+   "--deep-review applies only to Java, Rust, or Python projects, ignoring."
 
 Print: `Stack: <stack> | Architect: <agent>`
 
@@ -143,6 +154,7 @@ template — just append the whole matching block at the end.
 
 - If `stack=java`: append the JAVA ADDENDA block
 - If `stack=rust`: append the RUST ADDENDA block
+- If `stack=python`: append the PYTHON ADDENDA block
 - If `stack=react`: append the REACT ADDENDA block
 - If `stack=generic`: append the GENERIC OVERRIDE block
 - If `stack=nanoclaw` or `stack=openclaw`: append nothing (these agents have built-in expertise)
@@ -160,10 +172,10 @@ Spawn the resolved architect agent using the Agent tool with:
 You MUST construct the prompt using the template below — do not pass these skill
 instructions verbatim.
 
-If `--deep-review` was specified, spawn the stack-matched reviewer in parallel:
-`greenharbor-backend-reviewer-java` for Java or
-`greenharbor-backend-reviewer-rust` for Rust. Use the matching deep-review
-prompt below and a stack-specific description.
+If `--deep-review` was specified, spawn the stack-matched reviewer in the same
+message so both run in parallel: `greenharbor-backend-reviewer-java`,
+`greenharbor-backend-reviewer-rust`, or `greenharbor-backend-reviewer-python`.
+Use the Deep Review Agent Prompt below and a stack-specific description.
 
 ### Step 2: Merge Deep Review (conditional)
 
@@ -184,15 +196,17 @@ If `--deep-review` was NOT used, skip this step entirely.
 
 First, check if the output file exists. If it does NOT exist, inform the user:
 "The architect agent did not produce an output file. This may indicate the repo
-was too large for single-agent analysis. Try re-running with a narrower scope
-focus (--skip-interview and set scope via the interview) or a --stack override."
-Then stop — do not proceed to Step 4.
+was too large for single-agent analysis. Try re-running with `--scope <path>` or
+a `--stack` override." If `--deep-review` ran, print its findings so they are not
+lost. Then stop — do not proceed to Step 4.
 
 If the file exists, read it back and validate:
 
 1. **Section headings**: Confirm all required headings exist (Executive Summary,
    0, 1, 1.5, 2, 3, 4, 5, 5.1, 6). Log a warning for any missing section.
-2. **Content depth**: For each section, check it has at least 3 lines of content
+2. **Completion**: If the Executive Summary is still the placeholder, warn that
+   the agent stopped before finishing Stage F and name the last section written.
+3. **Content depth**: For each section, check it has at least 3 lines of content
    below the heading. If any section is a stub (heading + fewer than 3 lines),
    warn the user: "Section X appears incomplete — the agent may have run out of
    context. Consider re-running with a narrower scope focus."
@@ -217,9 +231,9 @@ Agent tool.
 **Variables:**
 - `{repo_path}` — Absolute path to the repository root
 - `{repo_name}` — Basename of the repo directory (e.g., "my-project")
-- `{stack}` — Detected stack (java, react, nanoclaw, openclaw, generic)
+- `{stack}` — Detected stack (java, rust, python, react, nanoclaw, openclaw, generic)
 - `{knobs}` — Formatted knobs from the interview (or "all not specified")
-- `{scope}` — Scope focus from interview (or "entire repo")
+- `{scope}` — Scope focus from `--scope` or the interview (or "entire repo")
 - `{scope_path}` — Directory path for scope (e.g., "src/billing"), or "." if entire repo
 - `{output_path}` — Absolute path to the output file
 - `{date}` — Current date in YYYY-MM-DD format
@@ -230,7 +244,9 @@ Agent tool.
 You are performing a forensic repository audit — not designing a new system.
 Ignore your normal interaction protocol (no clarifying questions, no options
 analysis, no ADRs). Your sole job is to methodically execute the stages below,
-producing a single audit report.
+producing a single audit report. Do not spawn or delegate to other agents, do
+not invoke greenharbor-* workflow skills, and do not modify any file except
+the output file.
 
 REPO: {repo_path}
 REPO NAME: {repo_name}
@@ -280,10 +296,11 @@ OPERATING RULES — follow these strictly:
    between stages. If a hot file (A.5) was rated healthy (D), or a spec gap (C)
    has no corresponding roadmap item (E), flag it explicitly in Stage F under a
    "Coherence Flags" subsection.
-8. Single-write composition: Compose the entire report in memory as you work
-   through the stages. After completing ALL stages including Coherence Flags,
-   write the Executive Summary based on everything you learned, then write the
-   COMPLETE report to the output file in a single Write tool call.
+8. Progressive writes: so an exhausted context still leaves a usable report,
+   write the file in three passes. After Stage C, Write the header table, an
+   `## Executive Summary` placeholder line, and sections 0-3. After Stage E,
+   append sections 4-5.1. After Stage F, append section 6, then replace the
+   placeholder with the real Executive Summary.
 
 ---
 
@@ -489,8 +506,8 @@ If no contradictions are found, write "No coherence flags."
 
 OUTPUT FORMAT
 
-Compose the entire report in memory, then write it to {output_path} in a single
-Write call. Use these exact headings:
+Write the report to {output_path} progressively (operating rule 8). Use these
+exact headings:
 
 # Next-Phase Audit: {repo_name}
 
@@ -500,7 +517,7 @@ Write call. Use these exact headings:
 | Repo | {repo_path} |
 | Scope | {scope} |
 | Stack | {stack} |
-| Skill version | 1.3.0 |
+| Skill version | 1.4.0 |
 
 ## Executive Summary
 
@@ -609,6 +626,36 @@ When executing Stage F, also consider toolchain/MSRV, edition/resolver,
 dependency-source, feature, and target-support upgrades.
 </rust-addenda>
 
+### PYTHON ADDENDA
+
+<python-addenda>
+STACK-SPECIFIC INSTRUCTIONS FOR PYTHON:
+
+When executing Stage A, also inventory `pyproject.toml`/`setup.cfg`/requirements
+files, the packaging and lock tool (uv, Poetry, pip-tools), Python version
+constraints, entry points/console scripts, and type-checker/linter config.
+
+When executing Stage B, identify web frameworks (FastAPI, Flask, Django), CLI
+frameworks (Typer, Click, argparse), sync/async boundaries, worker/queue
+processes, and public SDK exports in `__init__.py`.
+
+When executing Stage D, apply Python-specific depth:
+- Testing: pytest layout, fixtures, async tests, contract/integration coverage
+- Security: subprocess/shell use, path handling, deserialization, secrets in
+  config/env, HTTP client timeouts, dependency pinning
+- Reliability: blocking calls in async code, broad exception swallowing,
+  resource cleanup (context managers), retry/backoff on external calls
+- Typing: annotation coverage, mypy/pyright strictness, Pydantic model validation
+
+When executing Stage E, specify the appropriate Python agent type:
+`greenharbor-backend-coder-python`, `greenharbor-backend-reviewer-python`,
+`greenharbor-backend-security-reviewer-python`, or
+`greenharbor-backend-api-contract-reviewer-python`.
+
+When executing Stage F, also consider Python version, packaging, and lock-file
+migrations.
+</python-addenda>
+
 ### REACT ADDENDA
 
 <react-addenda>
@@ -646,8 +693,8 @@ When executing Stage F, also consider:
 <generic-addenda>
 STACK-SPECIFIC INSTRUCTIONS — GENERIC MODE:
 
-This project did not match a specific stack (Java, Rust, React, NanoClaw, OpenClaw).
-Do NOT apply Java/Spring-specific, Rust, or React-specific analysis patterns. Instead:
+This project did not match a specific stack (Java, Rust, Python, React, NanoClaw, OpenClaw).
+Do NOT apply Java/Spring-specific, Rust, Python, or React-specific analysis patterns. Instead:
 
 1. Read the build file to identify the actual language and framework
 2. Analyze using language-agnostic software engineering principles
@@ -661,13 +708,22 @@ Do NOT apply Java/Spring-specific, Rust, or React-specific analysis patterns. In
 
 ## Deep Review Agent Prompt
 
-When `--deep-review` is active for Java, spawn a `greenharbor-backend-reviewer-java` agent in parallel
-with `run_in_background: true` and `description`: "Deep review Java codebase".
-Use this prompt:
+When `--deep-review` is active, every deep-review prompt starts with this block,
+then the stack template below:
+
+```
+You are a read-only reviewer for a parent audit workflow. Do not edit or write
+files, spawn or delegate to agents, or invoke greenharbor-* workflow skills.
+Scope: {scope_path} under {repo_path}. Report at most 15 findings, highest
+severity first; cite file:line for each.
+```
+
+For Java, spawn `greenharbor-backend-reviewer-java` with `description`: "Deep
+review Java codebase" and use:
 
 <deep-review-template>
-Review the entire Java/Spring Boot codebase at {repo_path} for production
-readiness issues. Focus on high-impact findings only:
+Review the Java/Spring Boot code in scope for production readiness issues.
+Focus on high-impact findings only:
 
 1. Transaction hazards (@Transactional misuse, boundaries spanning external calls)
 2. N+1 query patterns (lazy loading without fetch joins)
@@ -690,7 +746,7 @@ Sort by severity (Critical first).
 For Rust, spawn `greenharbor-backend-reviewer-rust` with `description`: "Deep review Rust codebase" and use:
 
 <rust-deep-review-template>
-Review the Rust codebase at {repo_path} for production-readiness issues. Focus on:
+Review the Rust code in scope for production-readiness issues. Focus on:
 
 1. Soundness/unsafe/FFI invariants and panic boundaries
 2. Async blocking, locks across `.await`, cancellation, shutdown, and resource bounds
@@ -700,6 +756,20 @@ Review the Rust codebase at {repo_path} for production-readiness issues. Focus o
 
 For each finding, provide severity, file and line, concise impact, and a one-sentence fix. Do not write files; return structured findings sorted by severity.
 </rust-deep-review-template>
+
+For Python, spawn `greenharbor-backend-reviewer-python` with `description`: "Deep review Python codebase" and use:
+
+<python-deep-review-template>
+Review the Python code in scope for production-readiness issues. Focus on:
+
+1. Security: shell/subprocess injection, path traversal, unsafe deserialization, secrets in code or logs
+2. Async hazards: blocking I/O in async paths, missing awaits, unbounded concurrency
+3. Error handling: broad excepts that swallow failures, missing timeouts/retries on external calls
+4. Resource handling: files, sessions, and connections without context managers
+5. Public API/CLI compatibility, typing gaps on public interfaces, and test quality
+
+For each finding, provide severity, file and line, concise impact, and a one-sentence fix. Do not write files; return structured findings sorted by severity.
+</python-deep-review-template>
 
 The skill orchestrator (you) is responsible for merging these findings into the
 architect's output during Step 2 using the Edit tool. The deep-review agent does

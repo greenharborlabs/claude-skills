@@ -1,6 +1,14 @@
 ---
 name: greenharbor-improve-codebase-architecture
 description: Explore a codebase to find opportunities for architectural improvement, focusing on making the codebase more testable by deepening shallow modules. Use when user wants to improve architecture, find refactoring opportunities, consolidate tightly-coupled modules, or make a codebase more AI-navigable.
+allowed-tools:
+  - Read
+  - Grep
+  - Glob
+  - Bash
+  - Write
+  - Agent
+  - AskUserQuestion
 ---
 
 # Improve Codebase Architecture
@@ -13,7 +21,7 @@ A **deep module** (John Ousterhout, "A Philosophy of Software Design") has a sma
 
 ### 1. Explore the codebase
 
-Use the Agent tool with subagent_type=Explore to navigate the codebase naturally. Do NOT follow rigid heuristics — explore organically and note where you experience friction:
+If the user named a path or module, limit exploration to it. Launch one Agent with `subagent_type: Explore` ("very thorough") to navigate the codebase naturally. Do NOT give it rigid heuristics — ask it to explore organically, note where it experiences friction, and return a condensed list of friction points, each with file paths and one line of evidence. Friction to look for:
 
 - Where does understanding one concept require bouncing between many small files?
 - Where are modules so shallow that the interface is nearly as complex as the implementation?
@@ -21,11 +29,11 @@ Use the Agent tool with subagent_type=Explore to navigate the codebase naturally
 - Where do tightly-coupled modules create integration risk in the seams between them?
 - Which parts of the codebase are untested, or hard to test?
 
-The friction you encounter IS the signal.
+The friction you encounter IS the signal. Read the key files behind the strongest friction points yourself before presenting candidates, so each candidate rests on code you have seen.
 
 ### 2. Present candidates
 
-Present a numbered list of deepening opportunities. For each candidate, show:
+Present a numbered list of 3-7 deepening opportunities, strongest first. For each candidate, show:
 
 - **Cluster**: Which modules/concepts are involved
 - **Why they're coupled**: Shared types, call patterns, co-ownership of a concept
@@ -48,14 +56,14 @@ Show this to the user, then immediately proceed to Step 5. The user reads and th
 
 ### 5. Design multiple interfaces
 
-Spawn 3+ sub-agents in parallel using the Agent tool. Each must produce a **radically different** interface for the deepened module.
+Spawn 3 sub-agents in parallel (one message, `subagent_type: Plan`), plus a 4th only when the cluster has remote or external dependencies. Each must produce a **radically different** interface for the deepened module.
 
-Prompt each sub-agent with a separate technical brief (file paths, coupling details, dependency category, what's being hidden). This brief is independent of the user-facing explanation in Step 4. Give each agent a different design constraint:
+Prompt each sub-agent with the same technical brief (file paths, coupling details, dependency category, what's being hidden) and its own design constraint. This brief is independent of the user-facing explanation in Step 4. Start every prompt with: "Read-only design task: do not edit files, spawn agents, or invoke greenharbor-* workflow skills. Return your design in under 500 words." Constraints:
 
 - Agent 1: "Minimize the interface — aim for 1-3 entry points max"
 - Agent 2: "Maximize flexibility — support many use cases and extension"
 - Agent 3: "Optimize for the most common caller — make the default case trivial"
-- Agent 4 (if applicable): "Design around the ports & adapters pattern for cross-boundary dependencies"
+- Agent 4 (remote/external dependencies only): "Design around the ports & adapters pattern for cross-boundary dependencies"
 
 Each sub-agent outputs:
 
@@ -73,4 +81,8 @@ After comparing, give your own recommendation: which design you think is stronge
 
 ### 7. Create GitHub issue
 
-Create a refactor RFC as a GitHub issue using `gh issue create`. Use the template in [REFERENCE.md](REFERENCE.md). Do NOT ask the user to review before creating — just create it and share the URL.
+Create a refactor RFC as a GitHub issue using `gh issue create`. Use the template in [REFERENCE.md](REFERENCE.md). The user's interface choice in Step 6 is the approval — do NOT ask them to review the issue text before creating it; create it and share the URL.
+
+If `gh repo view` fails (no GitHub remote, or `gh` is missing or unauthenticated), write the RFC to `plans/rfc-<candidate-slug>.md` instead and share that path.
+
+Finish by printing the next step: `/greenharbor-plan-work "Implement the <candidate> RFC (<issue URL or path>)" --mode eng`.

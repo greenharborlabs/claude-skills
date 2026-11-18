@@ -78,7 +78,7 @@ Only flag real problems with specific `file:line` evidence. Skip anything that i
 - Constructor parameters derivable from already-injected config — derive instead
 
 **Complexity & Structure:**
-- Methods, branches, or nesting whose demonstrated cognitive load or mixed responsibilities obscure behavior
+- Long methods (roughly 40+ lines of logic), nesting deeper than about 3 levels, or loops with multiple `break`/`continue` exits — these are production-readiness issues, not style; suggest guard clauses, extracted methods, or stream/early-return rewrites
 - Classes with multiple unrelated responsibilities or changes that materially deepen coupling
 - Non-exhaustive `switch` logic that misses a reachable case; do not require `default` for compiler-checked exhaustive switches
 

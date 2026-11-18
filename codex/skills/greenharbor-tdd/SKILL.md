@@ -37,6 +37,8 @@ Each test should respond to what was learned in the previous cycle.
    - Identify the public interface.
    - List behaviors to test, ordered by risk and user value.
    - Prefer a deep module boundary when the code is complex.
+   - Find the focused test command and existing test conventions.
+   - Bug fixes: the first test reproduces the bug through the public interface.
 2. Tracer bullet:
    - Write one test for one behavior.
    - Run it and confirm it fails for the expected reason.

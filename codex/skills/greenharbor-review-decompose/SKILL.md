@@ -26,12 +26,12 @@ Usage:
 ## Workflow
 
 1. Gather project structure:
-   - Directory tree.
+   - Directory tree and source file/line counts, excluding generated, vendored, build output, lock, and minified files (`node_modules/`, `build/`, `target/`, `dist/`, `*.lock`, `*.min.*`).
    - Key configs and manifests.
    - README, AGENTS.md, CLAUDE.md, docs, or specs if present.
 2. Decompose into cohesive sections:
    - One logical concern per section.
-   - Target 15-20 files max per section.
+   - Max 15 files or 3,000 source lines per section (the same bound `greenharbor-code-review --full` uses).
    - Cross-cutting concerns can be separate sections.
    - Foundational layers should precede dependent layers.
 3. Assign each section:
@@ -44,9 +44,10 @@ Usage:
    - `suggested_reviewer_persona`
    - `priority`
    - `estimated_complexity`
-4. Write `00-master-plan.md` to the output directory with a JSON decomposition block and review order.
-5. Write one numbered per-section markdown file containing metadata, objectives, files, dependencies, shared context, and a ready-to-use review prompt.
-6. Summarize the section count, review order, output directory, and next step.
+4. If the output directory already has review files, ask whether to overwrite them or choose a new directory.
+5. Write `00-master-plan.md` to the output directory with a JSON decomposition block and review order.
+6. Write one numbered per-section markdown file (`NN-<section-slug>.md`) containing metadata, objectives, files, dependencies, shared context, and a ready-to-use review prompt.
+7. Summarize the section count, review order, output directory, and next step. The next step for each section is `greenharbor-code-review --scope "<comma-separated section files>"`, high-priority sections first.
 
 ## Focus Areas
 

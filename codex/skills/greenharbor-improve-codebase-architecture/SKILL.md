@@ -30,7 +30,8 @@ A deep module has a small interface hiding a large implementation. Deep modules 
    - Common-case optimized interface.
    - Ports/adapters interface when crossing infrastructure boundaries.
 6. Compare the designs, recommend one, and state why.
-7. After the user picks or accepts a recommendation, create a GitHub issue if the GitHub CLI/app is available and the user has not prohibited it. Otherwise write a local RFC draft and report the path.
+7. After the user picks or accepts a recommendation, create a GitHub issue if `gh repo view` succeeds and the user has not prohibited it. Otherwise write the RFC to `plans/rfc-<candidate-slug>.md` and report the path.
+8. Suggest the next step: `greenharbor-plan-work "Implement the <candidate> RFC (<issue URL or path>)" --mode eng`.
 
 ## Codex Agent Handling
 

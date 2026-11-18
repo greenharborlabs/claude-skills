@@ -40,9 +40,10 @@ Only flag real problems with specific `file:line` evidence. Skip anything that i
 - Empty `catch`, `then`, or `finally` blocks that silently swallow errors
 
 #### Complexity
-- Methods/functions whose mixed responsibilities or cognitive load demonstrably obscure behavior
-- Branching or nesting that makes reachable states difficult to reason about or test
-- Loops with control flow that hides termination, skips required work, or creates a credible correctness/performance risk
+- Long methods/functions (roughly 40+ lines of logic) that mix responsibilities — name the responsibilities and the extraction
+- Nesting deeper than about 3 levels of `if`/loop/`try` — suggest guard clauses or extracted helpers
+- Loops with multiple `break`/`continue` exits or flag variables controlling termination — suggest extracting the search/filter into a method that returns
+- Branching that makes reachable states difficult to reason about or test
 - Classes or methods combining unrelated responsibilities with a concrete maintenance or testability cost
 - Parameter lists that repeatedly cause call-site mistakes or expose a missing domain concept
 

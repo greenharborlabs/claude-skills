@@ -45,7 +45,9 @@ Then stop.
 - `description` is required unless help is requested.
 - `--mode` defaults to `auto`.
 - `--out` defaults to `plans/<slugified-description>.md`.
-- `--branch` defaults to `main`.
+- `--branch` defaults to `main`. It is `BRANCH_REF` in the references: the
+  baseline for `git diff BRANCH_REF --stat` during exploration, and it is
+  propagated to playbook commands when not `main`.
 - `--dry-run` prints the phase plan and reference list; it does not write files or
   spawn agents.
 
@@ -69,6 +71,8 @@ Then stop.
    - `auto`: greenfield/build/create or no matching code -> `ceo`; fix/refactor/update/bug or small touched surface -> `eng`; if unclear, ask once.
    - If `--dry-run`, print the resolved mode and the reference files that would
      be read for each phase, then stop.
+   - If the `--out` path already exists, ask now — before any exploration —
+     whether to overwrite it, choose a new path, or build on the existing plan.
 2. Run conditional discovery and intake.
    - Read [discovery-and-intake.md](references/discovery-and-intake.md) only if
      the description is brief, `--interview` is set, mode is unclear, or you need
@@ -76,13 +80,16 @@ Then stop.
 3. Explore the codebase and draft the plan.
    - Read [plan-template.md](references/plan-template.md) before writing the plan
      or when you need the exact work-unit/template shape.
+   - Write the draft to the `--out` path before step 4; the architect reads it
+     from disk. Mark it `**Status:** draft — under architect review` in the header.
 4. Run independent architect review.
    - Read [architect-review.md](references/architect-review.md) immediately before
      spawning architect agent(s). Do not load it earlier.
 5. Incorporate findings and run the confidence gate.
    - Read [confidence-gate.md](references/confidence-gate.md) when architect
      findings return.
-6. Write the final plan and print the orchestration playbook.
+6. Write the final plan over the draft (drop the draft status line) and print
+   the orchestration playbook.
 
 ## Token Budget
 

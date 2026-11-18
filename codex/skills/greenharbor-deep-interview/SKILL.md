@@ -23,8 +23,11 @@ Usage:
 ## Arguments
 
 - Topic: required unless `--resume` is provided.
-- `--out PATH`: output file, default `plans/interview-spec.md`.
-- `--resume`: resume from an existing partial output file.
+- `--out PATH`: output file, default `plans/<topic-slug>-spec.md`.
+- `--resume`: resume the in-progress checkpoint in the output file.
+
+If the output file exists and `--resume` was not given, ask whether to resume,
+overwrite, or choose a new path before gathering context.
 
 ## Critical Rules
 
@@ -32,7 +35,9 @@ Usage:
 - Do not ask questions answerable from the codebase or local files.
 - Prefer `request_user_input` when available. If unavailable, ask concise direct questions.
 - Ask only questions that change the spec, lock an assumption, or choose between real tradeoffs.
-- Continue until the relevant dimensions are covered deeply enough for implementation.
+- Continue until the relevant dimensions are covered deeply enough for implementation. The user owns the stopping point: after every third round, ask whether to continue with the named uncovered dimensions or write the spec now.
+- Gather codebase context once up front (about 5 searches and 8 targeted reads); read more only when an answer points at unseen code.
+- Checkpoint every round: write the output file with `**Status:** in progress`, decisions so far, the coverage table, and an `## Open Threads` section.
 
 ## Interview Dimensions
 
@@ -51,16 +56,19 @@ Cover dimensions that apply to the topic:
 
 ## Workflow
 
-1. Parse the topic, output path, and resume flag.
+1. Parse the topic, output path, and resume flag. On `--resume`, restore decisions, coverage, and open threads from the checkpoint and skip settled questions.
 2. Gather codebase context relevant to the topic.
 3. Interview in rounds. Each round should ask a small set of high-impact questions and then adapt follow-ups to the answers.
 4. Track decisions and open items as the interview progresses.
-5. Write the final specification to the output path.
+5. Write the final specification over the checkpoint with `**Status:** complete`.
 
 ## Specification Format
 
 ```markdown
 # [Topic] Specification
+
+**Status:** complete | in progress
+**Updated:** <YYYY-MM-DD>
 
 ## Summary
 
@@ -77,9 +85,14 @@ Cover dimensions that apply to the topic:
 
 ### Constraints
 
+## Coverage
+
+| Dimension | Status | Notes |
+|-----------|--------|-------|
+
 ## Open Items
 
 ## Interview Transcript Summary
 ```
 
-After writing the spec, summarize the output path, decision count, open item count, and dimensions covered.
+After writing the spec, summarize the output path, decision count, open item count, and dimensions covered, and suggest `greenharbor-plan-work "Implement <topic> per the spec in <output path>" --spec --no-interview`.

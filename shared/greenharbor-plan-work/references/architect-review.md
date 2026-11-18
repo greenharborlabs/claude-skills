@@ -4,27 +4,34 @@ Load this immediately before spawning architect reviewer agents.
 
 ## Architect Agent Detection
 
-Use max 2 glob calls:
+Use the plan's `**Files:**` paths first, then max 2 glob calls. First match wins:
 
 | Signal | Architect |
 | --- | --- |
 | `*.java`, `*.gradle`, `pom.xml` | `greenharbor-backend-planning-architect` |
-| `*.ts`/`*.tsx` + React signals | `greenharbor-frontend-architect` |
+| `Cargo.toml` + `*.rs` | `greenharbor-backend-planning-architect-rust` |
 | `nanoclaw`/`container` signals | `greenharbor-nanoclaw-architect` |
 | `*.py` + `openclaw`/`alpaca`/`kalshi` | `greenharbor-openclaw-architect` |
-| Mixed/unknown | `greenharbor-backend-planning-architect` fallback |
+| `*.py` (generic) | `greenharbor-backend-planning-architect-python` |
+| `*.ts`/`*.tsx` + React signals | `greenharbor-frontend-architect` |
+| Mixed/unknown | ask the user once with the detected signals; if they defer, use `general-purpose` |
 
 Record a secondary architect only when the plan itself crosses stack boundaries,
 not merely because the repo is a monorepo.
 
 ## Primary Architect Prompt
 
-If the exact resolved architect name is available as a Codex skill, insert
-`Use $<resolved-architect-name> for this plan review.` as the first prompt line.
-Otherwise omit the directive and use the self-contained prompt. Never emit an
-unresolved placeholder.
+Claude Code: spawn the resolved architect as the Agent `subagent_type` and omit
+the skill directive. Codex: if the exact resolved architect name is available as
+a Codex skill, insert `Use $<resolved-architect-name> for this plan review.` right
+after the role boundary; otherwise omit it. Never emit an unresolved placeholder.
 
 ```text
+## Role boundary
+You are a read-only plan reviewer for a parent planning workflow. Do not edit
+files, spawn or delegate to agents, or invoke greenharbor-* workflow skills.
+Return your review to the parent.
+
 <optional Architect skill directive; omit when unavailable>
 You are reviewing an implementation plan for quality, completeness, and correctness.
 Your review is independent. Approach it with fresh eyes.
@@ -94,7 +101,8 @@ Handling, and Test Strategy. Use a micro-review budget: max 4 file reads and max
 
 ## Secondary Architect
 
-Use only for cross-stack plans. Prompt the secondary architect to review only
+Use only for cross-stack plans. Start its prompt with the same role boundary.
+Prompt the secondary architect to review only
 its stack's work units with checklist items 1-3, budget 6 reads + 4 searches,
 and confidence scores for Architecture and Test Strategy only. Prefix findings
 with `[SECONDARY]`.

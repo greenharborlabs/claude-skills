@@ -8,7 +8,7 @@ Read-only:
 
 ```bash
 git log --oneline -20
-git diff <BRANCH_REF> --stat
+git diff BRANCH_REF --stat   # BRANCH_REF = --branch value, default main
 git rev-parse --short HEAD
 ```
 
@@ -147,9 +147,6 @@ CURRENT STATE          THIS PLAN              12-MONTH IDEAL
   optional sections.
 - In compact `eng` plans, make Architecture one short paragraph unless the work
   crosses module, service, persistence, or API boundaries.
-
-Before writing, if `--out` already exists, ask whether to overwrite, choose a new
-path, or read/build on the existing plan.
 
 Plan size check after draft:
 

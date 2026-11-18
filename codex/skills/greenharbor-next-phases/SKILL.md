@@ -1,6 +1,6 @@
 ---
 name: greenharbor-next-phases
-description: Full-repository audit producing a next-phase roadmap. Use when the user wants to analyze a codebase and generate a prioritized roadmap of what to build or fix next, or says "greenharbor-next-phases". Supports Java/Spring, Rust, and generic repo analysis.
+description: Full-repository audit producing a next-phase roadmap. Use when the user wants to analyze a codebase and generate a prioritized roadmap of what to build or fix next, or says "greenharbor-next-phases". Supports Java/Spring, Rust, Python, and generic repo analysis.
 ---
 
 # Next Phases
@@ -18,7 +18,8 @@ Usage:
   greenharbor-next-phases
   greenharbor-next-phases path/to/repo
   greenharbor-next-phases --out plans/greenharbor-next-phases.md
-  greenharbor-next-phases --stack auto|java|rust|generic
+  greenharbor-next-phases --stack auto|java|rust|python|generic
+  greenharbor-next-phases --scope src/billing
   greenharbor-next-phases --skip-interview
   greenharbor-next-phases --deep-review
 ```
@@ -27,9 +28,10 @@ Usage:
 
 - `repo-path`: default current working directory.
 - `--out PATH`: default `plans/greenharbor-next-phases.md`.
-- `--stack auto|java|rust|generic`: default `auto`; Java if `*.java`, `*.gradle`, or `pom.xml` are present; Rust if `Cargo.toml` and `*.rs` are present.
+- `--stack auto|java|rust|python|generic`: default `auto`; Java if `*.java`, `*.gradle`, or `pom.xml` are present; Rust if `Cargo.toml` and `*.rs` are present; Python if `pyproject.toml`, `setup.py`, or `requirements*.txt` accompany `*.py` files.
+- `--scope PATH`: focus the audit (including git-history commands) on one path; overrides the interview's scope answer.
 - `--skip-interview`: skip project knobs interview.
-- `--deep-review`: for Java or Rust repos, include a deeper production-readiness review pass.
+- `--deep-review`: for Java, Rust, or Python repos, include a deeper production-readiness review pass.
 
 ## Workflow
 
@@ -39,6 +41,7 @@ Usage:
    - Known pain points.
    - Non-negotiables.
    - Risk tolerance.
+   - Scope focus (skip when `--scope` is given).
 3. Detect stack.
 4. Apply the matching role overlay, then run the audit stages. If the user explicitly requests parallel agent work, Codex explorer agents may be used for independent stages; otherwise do the work in the main session.
 5. Write output to the requested path using the exact section headings below.
@@ -48,7 +51,7 @@ Usage:
 - For Java, if `$greenharbor-backend-planning-architect` is available, read and apply its discovery, decision, Java/Spring, and rollout guidance while preserving this skill's roadmap output.
 - For Java with `--deep-review`, if `$greenharbor-backend-reviewer-java` is available, apply its evidence, risk, severity, and verification rules to Stage D, then merge and deduplicate its findings.
 - If either Java skill is unavailable, use the Java addenda below; do not invent or emit an unresolved skill name.
-- Rust and generic audits use their built-in addenda unless an exact matching skill is available.
+- Rust, Python, and generic audits use their built-in addenda unless an exact matching skill is available.
 
 ## Audit Stages
 
@@ -59,6 +62,8 @@ Inventory services/apps, libraries/packages, build and tooling, CI/CD, infrastru
 Java addendum: identify Spring Boot apps, Gradle/Maven structure, migrations, JPA entities, repositories, and `application.yml` / `application.properties`.
 
 Rust addendum: identify Cargo workspaces, package manifests/lockfiles, toolchain/MSRV/edition, features, targets, build scripts, public crate roots, unsafe/FFI boundaries, and async runtimes.
+
+Python addendum: identify packaging/lock tooling (uv, Poetry, pip-tools), Python version constraints, entry points, web/CLI frameworks, and type-checker/linter config.
 
 ### Stage B - Architecture and Component Map
 
@@ -75,6 +80,8 @@ For each major spec/design requirement found, classify status as Implemented, Pa
 ### Stage D - Codebase Health Assessment
 
 Assess maintainability, testing, security, performance/reliability, deployment/ops, and developer experience. For Java, include Spring Security, validation, JPA, transaction, actuator, and Micrometer concerns.
+
+For Python, include subprocess/path/deserialization security, blocking calls in async code, broad exception swallowing, resource cleanup, HTTP timeouts/retries, and typing strictness.
 
 For Rust, include unsafe/FFI soundness, Cargo/RustSec supply-chain posture, public API/SemVer/MSRV/features, serde/CLI/FFI contracts, async cancellation/backpressure/locking, and bounded resource use.
 

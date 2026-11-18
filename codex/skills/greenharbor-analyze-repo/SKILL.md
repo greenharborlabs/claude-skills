@@ -34,12 +34,13 @@ Options:
 
 ## Workflow
 
-1. Confirm the current directory is a git repository.
+1. Confirm this is a git repository with `git rev-parse --show-toplevel` and analyze from that root. If the output file exists, append `-2`, `-3`, ... rather than overwriting.
 2. Read `references/report-template.md` for the report structure.
 3. Gather facts with read-only commands and file reads. Prefer `rg`, `rg --files`, `find`, `git log`, `git remote`, and manifest/config reads.
 4. Run the selected phases yourself in order. If the user explicitly requested parallel agent work, distinct phase groups may be delegated to Codex explorer agents; otherwise do the analysis directly.
-5. Synthesize findings into the report template.
-6. Write the report to the requested output path.
+5. Before writing, re-read the cited lines for every security concern, the entry points and run commands, and any surprising claim; correct or drop claims that do not hold.
+6. Synthesize findings into the report template, including only the selected phases.
+7. Write the report to the requested output path.
 
 ## Phases
 
@@ -56,6 +57,7 @@ Options:
 
 - Every non-trivial claim must cite file paths and, when useful, line numbers or symbols.
 - Report repo evidence only. Do not invent missing features or infer behavior not supported by code.
+- Name secret-bearing files and variables; never reproduce secret values.
 - Use markdown tables for structured facts and ASCII diagrams for flows.
 - If a phase is not applicable, keep a short "Not applicable" note with evidence.
 - Keep the report useful for onboarding: accurate entry points, run commands, and the files a new engineer should read first.
