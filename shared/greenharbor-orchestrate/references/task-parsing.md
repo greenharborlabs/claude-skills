@@ -32,15 +32,12 @@ Apply `--scope` after extraction and always include transitive dependencies.
 
 ## Task Graph
 
-For each work unit, create or reuse a task:
+The checkpoint file is the task graph; there is no separate task tool. Write it
+on every non-dry run (not only `--resume`) so a later `--resume` has state.
+Record each work unit's status and its dependencies in `depends_on`; re-read
+unit bodies from the plan instead of storing them.
 
-- `subject`: imperative heading.
-- `description`: full unit body.
-- `activeForm`: present-continuous form.
-
-Wire dependencies with blocked-by/blocks relationships.
-
-Resume mode:
+Checkpoints:
 
 - Store checkpoints in `.orchestrate/<plan-file-basename>-<plan-hash>.json`.
 - If the checkpoint path would collide, prefer the matching `plan_path` and
@@ -52,7 +49,8 @@ Resume mode:
   "plan_path": "<path>",
   "plan_hash": "<content hash>",
   "start_commit": "<START_COMMIT>",
-  "tasks": {"<id>": "pending|in_progress|completed|blocked"},
+  "tasks": {"<id>": "pending|in_progress|implemented|completed|blocked"},
+  "depends_on": {"<id>": ["<id>"]},
   "blocked_reasons": {"<id>": "<short reason>"},
   "gates": {"final_verification": "pending|completed", "specialist_review": "pending|completed"},
   "touched_tests": ["<path>"],
@@ -62,21 +60,22 @@ Resume mode:
 }
 ```
 
+On `--resume`:
+
 - `completed`: skip.
+- `implemented`: skip re-implementation; it still goes through the final
+  cumulative review.
 - `in_progress`: reset to pending.
 - `pending`: reuse.
 - `blocked`: keep blocked unless its dependency context changed or the user
   scopes directly to that task.
-- Create only unmatched work units.
-- Update the checkpoint after each work group completes, blocks, or changes gate
-  state. Do not store raw diffs, full reports, or file contents.
+- Add only work units not already in the checkpoint.
+- If all work units are implemented or completed, resume at the first
+  incomplete gate in `gates`.
 
-Create sentinel tasks:
-
-- `final-verification-gate`.
-- `specialist-review-gate`.
-
-If work-unit tasks are complete on resume, resume at the first incomplete gate.
+Update the checkpoint after each work group is implemented or blocked, after
+each wave's contract registry update, and on every gate change. Do not store raw
+diffs, full reports, or file contents.
 
 ## Dry Run
 
@@ -90,5 +89,5 @@ Agent suite   : <coder> / <reviewer> / <architect>
 Test command  : <TEST_CMD>
 Specialists   : <security + api-contract, or none>
 Est. min spawns: <lower bound before fix cycles>
-References    : task-parsing, stack-detection, agent-prompts, review-loop, specialist-reviews only if needed
+References    : task-parsing, stack-detection, agent-prompts, wave-execution, review-loop, specialist-reviews only if needed
 ```

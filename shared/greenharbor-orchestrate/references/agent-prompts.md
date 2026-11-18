@@ -2,50 +2,18 @@
 
 Load this before constructing Coder, Reviewer, Architect, or docs prompts.
 
+Every prompt starts with the worker role boundary block from SKILL.md, then the
+optional skill directive, then the template body.
+
 ## Optional Codex Skill Overlay
 
-Before constructing a role prompt, check whether the exact resolved role name is
-available as a Codex skill. If it is, insert `Use $<resolved-role-name> for this
-task.` as the first line. If it is not, omit the directive and rely on the
-self-contained prompt below. Never emit an unresolved placeholder or invent a
-skill name.
+Claude Code: skip this step; agent types already carry their role.
 
-## Batch Exploration
-
-Before each batch:
-
-- Re-read the relevant wave/section from the plan file.
-- Max `2 file reads per task + 2 baseline`.
-- Max `1 search per task + 1 baseline`.
-- Prefer targeted line ranges.
-- Use the contract registry instead of re-reading prior batch interfaces.
-- Extract acceptance criteria once per work group into compact IDs (`AC-01`,
-  `AC-02`, ...). Preserve the exact criterion text in that list; reference IDs
-  elsewhere instead of repeating long prose.
-
-For each task identify only entry points, required signatures/contracts, and
-affected test files.
-
-Group sizing:
-
-- Default one task = one work group.
-- Merge tasks sharing the same entry-point file.
-- Max 3 tasks per work group.
-- Max 3 running sub-agents total.
-
-## Bounded Sub-Agent Queue
-
-Use an explicit `ACTIVE_AGENTS` set for every wave.
-
-- Before spawning, if `ACTIVE_AGENTS` has 3 IDs, wait on all active IDs until at
-  least one completes.
-- Capture the completed agent's report, close that agent immediately, and remove
-  it from `ACTIVE_AGENTS`.
-- Add each newly spawned agent ID to `ACTIVE_AGENTS` immediately.
-- Do not spawn Coder retries, Reviewers, Architects, specialists, or docs agents
-  until a slot is available.
-- Prefer batches of 3 work groups, then refill one slot at a time as agents
-  finish. Do not launch the whole wave at once.
+Codex: before constructing a role prompt, check whether the exact resolved role
+name is available as a Codex skill. If it is, insert `Use $<resolved-role-name>
+for this task.` right after the role boundary. If it is not, omit the directive
+and rely on the self-contained prompt below. Never emit an unresolved
+placeholder or invent a skill name.
 
 ## Coder Prompt
 
@@ -85,12 +53,15 @@ Use public interfaces. Mock only external APIs, databases, time, randomness.
 - Do not change public interfaces unless the spec requires it.
 - Keep changes focused.
 - If scope is larger than expected, implement what is safe and report the gap.
+- Do not commit, stage, or stash; leave all changes in the working tree.
 
 ## Watch for
 <stack-specific warnings from below + universal warnings>
 
 ## Self-test before reporting
 Run: <literal TEST_CMD with affected tests>
+If it fails, fix and re-run. After 2 fix attempts, stop and report FAIL with the
+failing test names and a short error summary.
 
 ## Completion report format
 FILES_CHANGED: <comma-separated list>
@@ -129,23 +100,30 @@ input in sensitive operations.
 <optional Reviewer skill directive; omit when unavailable>
 
 ## Review task
-Review implementation against the spec.
+Review the cumulative implementation against the spec.
 
 ## Spec excerpt(s)
-<short relevant spec excerpt; omit unrelated background>
+<short relevant spec excerpts; omit unrelated background>
 
-## Coder self-test result
-<PASS/FAIL details>
+## Coder self-test results
+<per work group: PASS/FAIL details>
+
+## Aggregate verification
+<targeted test and confidence-command results>
 
 ## New interfaces introduced
-<NEW_INTERFACES, if any>
+<contract registry entries, if any>
 
-## Diff to review
-<git diff for changed files; default -U8, expand to -U20 only when needed;
-split by file for large work groups>
+## Changes to review
+Base commit: <START_COMMIT>
+Changed files:
+<CHANGED_FILES>
+Run `git diff <START_COMMIT> -- <file>` yourself, file by file. Default -U8;
+widen to -U20 only when needed. New files are marked intent-to-add, so they
+appear in the diff.
 
 ## Success criteria
-<same AC-ID list given to coder>
+<all task-derived AC-IDs with exact criterion text>
 
 ## Acceptance Criteria Verification (MANDATORY)
 For EACH criterion, output:
@@ -157,7 +135,7 @@ CRITERIA_CHECKLIST:
 Rules:
 - Copy each AC-ID and criterion text verbatim from the provided list.
 - Any FAIL/PARTIAL is CRITICAL.
-- Evidence must point to a line in the diff.
+- Evidence must point to a changed line in one of the changed files.
 
 ## What to check
 Interfaces, scope, tests, code quality, error handling, behavioral TDD quality.
@@ -177,19 +155,23 @@ SUMMARY:
 
 ## Architect Fix Prompt
 
-Use only when Reviewer sets `COMPLEX_ISSUES: YES`.
+Use only after Reviewer sets `COMPLEX_ISSUES: YES` and the user approves
+Architect escalation.
 
 ```text
 <optional Architect skill directive; omit when unavailable>
 
 ## Architect task
-Produce a targeted fix plan for a complex review failure.
+Produce a targeted fix plan for a complex review failure. Do not edit files.
 
 ## Original spec excerpt
 <spec>
 
 ## Current implementation
-<diff>
+Base commit: <START_COMMIT>
+Changed files:
+<CHANGED_FILES>
+Run `git diff <START_COMMIT> -- <file>` for the files you need.
 
 ## Critical issues found by reviewer
 <verbatim>

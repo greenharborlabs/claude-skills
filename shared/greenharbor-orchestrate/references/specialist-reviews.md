@@ -19,15 +19,17 @@ For React/TypeScript, run `greenharbor-frontend-reviewer` as a focused specialis
 
 ## Collect Context
 
-Set review baseline:
+Set review baseline. New files must already be marked intent-to-add (see
+review-loop.md, Review Diff) or they will be missing from the diff.
 
 ```bash
 REVIEW_BASE=${BRANCH_REF:-$START_COMMIT}
-git diff $REVIEW_BASE
 git diff $REVIEW_BASE --stat
 ```
 
-If diff is >500 lines, focus each specialist on domain-relevant files.
+Pass the stat output, not the diff; specialists run `git diff` themselves. If the
+stat shows >500 changed lines, list only domain-relevant files for each
+specialist.
 
 ## Specialist Prompt
 
@@ -43,11 +45,12 @@ Review ALL changes from this orchestration run.
 ## Plan context
 <plan Summary section + Risk Flags>
 
-## Aggregate diff (against <REVIEW_BASE>)
-<diff>
-
-## Changed files
-<diff stat>
+## Changes to audit
+Base: <REVIEW_BASE>
+Changed files:
+<diff stat, or the domain-relevant subset>
+Run `git diff <REVIEW_BASE> -- <file>` yourself for each file you audit.
+Do not edit files.
 
 ## Output format
 VERDICT: PASS | FAIL

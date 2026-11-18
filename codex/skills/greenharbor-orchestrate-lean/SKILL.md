@@ -1,6 +1,6 @@
 ---
 name: greenharbor-orchestrate-lean
-description: "Execute a bounded implementation plan with minimal agent overhead: one Coder per dependency wave, targeted verification, and one final review of the cumulative diff. Use for small to medium, low-risk plan files when speed and token efficiency matter; use greenharbor-orchestrate instead for migrations, security-sensitive changes, broad public API changes, or work requiring per-task review. Supports --scope, --dry-run, --review, and --no-review."
+description: "Execute a bounded implementation plan with minimal agent overhead: one Coder per dependency wave, targeted verification, and one final review of the cumulative diff. Use for small to medium, low-risk plan files when speed and token efficiency matter; use greenharbor-orchestrate instead for migrations, security-sensitive changes, broad public API changes, or work needing parallel Coders and specialist security/API reviews. Supports --scope, --dry-run, --review, and --no-review."
 ---
 
 # Lean Orchestrate
