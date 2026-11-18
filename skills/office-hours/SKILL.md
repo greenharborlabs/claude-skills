@@ -1,1 +1,0 @@
-/Users/mark/gstack/office-hours/SKILL.md

@@ -1,1 +1,0 @@
-/Users/mark/gstack/landing-report/SKILL.md

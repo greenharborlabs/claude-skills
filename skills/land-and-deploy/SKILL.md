@@ -1,1 +1,0 @@
-/Users/mark/gstack/land-and-deploy/SKILL.md

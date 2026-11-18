@@ -1,1 +1,0 @@
-/Users/mark/gstack/qa-only/SKILL.md

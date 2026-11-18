@@ -1,1 +1,0 @@
-/Users/mark/gstack/setup-deploy/SKILL.md

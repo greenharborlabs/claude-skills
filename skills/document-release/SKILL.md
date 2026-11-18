@@ -1,1 +1,0 @@
-/Users/mark/gstack/document-release/SKILL.md

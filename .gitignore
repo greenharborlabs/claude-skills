@@ -1,24 +1,23 @@
-# Track only agents/, skills/, and Codex skill definitions — ignore everything else
+# Track only greenharbor-* agents, skills, shared references, and Codex mirrors.
+# Everything else (gstack, keel symlinks, local folders) is ignored, so a
+# third-party installer writing into skills/ can never land in git.
 /*
 !.gitignore
 !agents/
-!skills/
 !shared/
+shared/*
 !shared/greenharbor-*/
 !shared/greenharbor-*/**
+!skills/
+skills/*
+!skills/greenharbor-*/
+!skills/greenharbor-*/**
 !codex/
 codex/*
 !codex/skills/
-!codex/skills/**
+codex/skills/*
+!codex/skills/greenharbor-*/
+!codex/skills/greenharbor-*/**
 
-# Inside codex/skills: ignore gstack-managed symlinks
-codex/skills/gstack
-codex/skills/gstack-*
-
-# Inside skills: ignore symlinks (managed in their own repos)
-skills/domain-name-brainstormer
-skills/skill-creator
-
-# Inside skills: ignore local settings and memory
-skills/.claude/
+# Local memory inside skill directories
 skills/**/memory/

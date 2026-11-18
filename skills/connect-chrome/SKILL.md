@@ -1,1 +1,0 @@
-/Users/mark/gstack/connect-chrome/SKILL.md

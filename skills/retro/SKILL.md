@@ -1,1 +1,0 @@
-/Users/mark/gstack/retro/SKILL.md

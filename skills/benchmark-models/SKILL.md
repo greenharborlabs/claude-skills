@@ -1,1 +1,0 @@
-/Users/mark/gstack/benchmark-models/SKILL.md

@@ -1,1 +1,0 @@
-/Users/mark/gstack/freeze/SKILL.md

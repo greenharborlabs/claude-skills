@@ -1,1 +1,0 @@
-/Users/mark/gstack/devex-review/SKILL.md

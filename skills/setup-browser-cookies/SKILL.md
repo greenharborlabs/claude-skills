@@ -1,1 +1,0 @@
-/Users/mark/gstack/setup-browser-cookies/SKILL.md

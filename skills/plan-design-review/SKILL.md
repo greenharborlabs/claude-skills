@@ -1,1 +1,0 @@
-/Users/mark/gstack/plan-design-review/SKILL.md

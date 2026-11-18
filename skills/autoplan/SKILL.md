@@ -1,1 +1,0 @@
-/Users/mark/gstack/autoplan/SKILL.md

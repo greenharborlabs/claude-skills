@@ -1,1 +1,0 @@
-/Users/mark/gstack/plan-eng-review/SKILL.md
